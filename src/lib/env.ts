@@ -29,7 +29,7 @@ export function validateEnv(): void {
   assertEnv("DATABASE_URL");
 }
 
-// Auto-validate in production on module load
-if (process.env.NODE_ENV === "production") {
+// Auto-validate in production at runtime only (not during build)
+if (process.env.NODE_ENV === "production" && typeof window === "undefined" && process.env.NEXT_PHASE !== "phase-production-build") {
   validateEnv();
 }

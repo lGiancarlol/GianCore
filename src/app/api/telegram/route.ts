@@ -13,10 +13,9 @@ export async function GET() {
   return NextResponse.json({ data: accounts });
 }
 
-export async function POST(req: Request) {
+export async function POST(_req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // TODO: implement telegram account creation
   return NextResponse.json({ message: "Not implemented" }, { status: 501 });
 }

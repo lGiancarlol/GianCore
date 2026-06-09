@@ -42,9 +42,8 @@ export async function POST(req: Request) {
 }
 
 // GET — dashboard polls this to check bot status
-export async function GET(req: Request) {
-  const session_header = req.headers.get("authorization");
-  // Allow unauthenticated GET for dashboard polling, but only return safe fields
+export async function GET(_req: Request) {
+  // Public endpoint — returns only safe non-sensitive fields
   const setting = await prisma.setting.findUnique({
     where: { key: "discord_bot_heartbeat" },
   });

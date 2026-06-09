@@ -13,10 +13,9 @@ export async function GET() {
   return NextResponse.json({ data: channels });
 }
 
-export async function POST(req: Request) {
+export async function POST(_req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // TODO: implement discord channel creation
   return NextResponse.json({ message: "Not implemented" }, { status: 501 });
 }

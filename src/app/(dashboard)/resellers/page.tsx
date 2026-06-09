@@ -11,7 +11,7 @@ import { useResellers } from "@/hooks/useResellers";
 import { useProducts }  from "@/hooks/useProducts";
 import {
   Users, UserPlus, Coins, Power, Pencil, RefreshCw,
-  ShieldCheck, Key,
+  ShieldCheck,
 } from "lucide-react";
 import type { User } from "@/types";
 

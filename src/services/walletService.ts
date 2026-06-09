@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/services/auditService";
-import type { TransactionType } from "@/types";
 
 // ── Get or create wallet ───────────────────────────────────────────────────────
 
