@@ -6,7 +6,7 @@ import {
   ChatInputCommandInteraction,
   Interaction,
 } from "discord.js";
-import { logger } from "../config/logger";
+import { logger, LOG_CTX } from "../config/logger";
 import type { BotCommand } from "../types";
 
 // ── Commands ───────────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ export function buildClient(): Client {
   const commands = new Collection<string, BotCommand>();
   for (const cmd of COMMANDS) {
     commands.set(cmd.data.name, cmd);
-    logger.debug("Client", `Command registered: /${cmd.data.name}`);
+    logger.debug(LOG_CTX.CLIENT, `Command registered: /${cmd.data.name}`);
   }
 
   // Register events
@@ -49,7 +49,7 @@ export function buildClient(): Client {
     } else {
       client.on(event.name, (...args) => (event.execute as any)(...args));
     }
-    logger.debug("Client", `Event registered: ${event.name}`);
+    logger.debug(LOG_CTX.CLIENT, `Event registered: ${event.name}`);
   }
 
   // Interaction handler
@@ -58,7 +58,7 @@ export function buildClient(): Client {
 
     const cmd = commands.get(interaction.commandName);
     if (!cmd) {
-      logger.warn("Client", `Unknown command: /${interaction.commandName}`);
+      logger.warn(LOG_CTX.CLIENT, `Unknown command: /${interaction.commandName}`);
       await (interaction as ChatInputCommandInteraction).reply({
         content: "Comando desconocido.",
         ephemeral: true,
@@ -67,13 +67,13 @@ export function buildClient(): Client {
     }
 
     try {
-      logger.info("Client", `Executing /${interaction.commandName}`, {
+      logger.info(LOG_CTX.CLIENT, `Executing /${interaction.commandName}`, {
         userId:  interaction.user.id,
         guildId: interaction.guildId ?? "DM",
       });
       await cmd.execute(interaction as ChatInputCommandInteraction);
     } catch (err) {
-      logger.error("Client", `Error in /${interaction.commandName}`, {
+      logger.error(LOG_CTX.CLIENT, `Error in /${interaction.commandName}`, {
         error: String(err),
       });
       const reply = { content: "❌ Ocurrió un error al ejecutar el comando.", ephemeral: true };

@@ -10,6 +10,7 @@ import {
   Zap, ScrollText, CheckCircle2, XCircle, Cpu, Mic,
 } from "lucide-react";
 import { useVoiceStats } from "@/hooks/useVoice";
+import { useDiscordHeartbeat } from "@/hooks/useDiscordHeartbeat";
 import WalletWidget from "@/components/shared/WalletWidget";
 import type { License, Product, AuditLog, Integration, VoiceStats } from "@/types";
 import type { LucideIcon } from "lucide-react";
@@ -87,6 +88,7 @@ export default function DashboardPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading,      setLoading]      = useState(true);
   const { stats: voiceStats, loading: voiceLoading } = useVoiceStats(15_000);
+  const { data: botStatus, loading: botLoading }     = useDiscordHeartbeat(30_000);
 
   useEffect(() => {
     Promise.allSettled([
@@ -330,6 +332,9 @@ export default function DashboardPage() {
         {/* Voice Licensing widget */}
         <VoiceWidget stats={voiceStats} loading={voiceLoading} />
 
+        {/* Discord Bot Status */}
+        <DiscordBotWidget status={botStatus} loading={botLoading} />
+
         {/* Module cards */}
         <div className="grid-3">
           <ModuleCard icon={MessageCircle} title="Discord Manager" description="Gestión de canales, roles y bots de Discord."  href="/discord"    color="blue"   />
@@ -416,6 +421,81 @@ function VoiceWidget({ stats, loading }: { stats: VoiceStats | null; loading: bo
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── DiscordBotWidget ───────────────────────────────────────────────────────────
+
+import type { BotStatus } from "@/hooks/useDiscordHeartbeat";
+
+function DiscordBotWidget({ status, loading }: { status: BotStatus | null; loading: boolean }) {
+  const online = status?.online ?? false;
+
+  function formatUptime(secs: number) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  }
+
+  function relativeLastSeen(iso: string | null) {
+    if (!iso) return "nunca";
+    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 10)  return "ahora mismo";
+    if (diff < 60)  return `hace ${diff}s`;
+    if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`;
+    return `hace ${Math.floor(diff / 3600)}h`;
+  }
+
+  return (
+    <div className="card card-p">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+            online ? "bg-green-500/10 border border-green-500/20" : "bg-secondary border border-border"
+          }`}>
+            <MessageCircle className={`w-4 h-4 ${online ? "text-green-400" : "text-muted-foreground"}`} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-foreground">Discord Bot</p>
+              <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                online
+                  ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                  : "bg-secondary text-muted-foreground border border-border"
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${online ? "bg-green-400 animate-pulse" : "bg-muted-foreground"}`} />
+                {loading ? "Verificando..." : online ? "Online" : "Offline"}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {loading
+                ? "Consultando estado..."
+                : status?.lastSeen
+                  ? `Último heartbeat: ${relativeLastSeen(status.lastSeen)}`
+                  : "Sin conexión registrada"}
+            </p>
+          </div>
+        </div>
+
+        {!loading && online && status && (
+          <div className="flex items-center gap-5 flex-wrap">
+            <div className="text-center">
+              <p className="text-lg font-bold text-foreground">{status.guilds}</p>
+              <p className="text-[10px] text-muted-foreground">Servidores</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold text-foreground">{status.sessions}</p>
+              <p className="text-[10px] text-muted-foreground">En voz ahora</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold text-foreground">{formatUptime(status.uptime)}</p>
+              <p className="text-[10px] text-muted-foreground">Uptime</p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

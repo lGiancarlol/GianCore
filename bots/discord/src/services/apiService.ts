@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import { config } from "../config";
-import { logger } from "../config/logger";
+import { logger, LOG_CTX } from "../config/logger";
 import type {
   VoiceJoinResponse,
   VoiceLeaveResponse,
@@ -10,7 +10,7 @@ import type {
 
 // ── Axios instance ─────────────────────────────────────────────────────────────
 
-const http = axios.create({
+export const http = axios.create({
   baseURL: config.api.url,
   timeout: 10_000,
   headers: {
@@ -19,22 +19,70 @@ const http = axios.create({
   },
 });
 
-// ── Error helper ───────────────────────────────────────────────────────────────
+// ── Error helpers ──────────────────────────────────────────────────────────────
 
-function apiError(err: unknown): string {
-  if (err instanceof AxiosError) {
-    return err.response?.data?.error ?? err.message;
-  }
-  return String(err);
+export interface ApiFailure {
+  ok:     false;
+  reason: string;
+  status: number;
 }
 
-// ── Voice endpoints ────────────────────────────────────────────────────────────
+function extractError(err: unknown): { reason: string; status: number } {
+  if (err instanceof AxiosError) {
+    return {
+      reason: err.response?.data?.error ?? err.message,
+      status: err.response?.status ?? 500,
+    };
+  }
+  return { reason: String(err), status: 500 };
+}
+
+function logApiError(operation: string, payload: unknown, err: unknown) {
+  const { reason, status } = extractError(err);
+  logger.error(LOG_CTX.API_ERROR, `${operation} failed`, { payload, reason, status });
+  return { reason, status };
+}
+
+// ── Connectivity check ─────────────────────────────────────────────────────────
+
+export async function checkApiConnectivity(): Promise<boolean> {
+  try {
+    await http.get("/api/voice/stats");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ── Heartbeat ──────────────────────────────────────────────────────────────────
+
+export async function sendHeartbeat(meta: {
+  uptime:   number;
+  guilds:   number;
+  sessions: number;
+}): Promise<boolean> {
+  try {
+    await http.post("/api/integrations/discord/heartbeat", {
+      status: "online",
+      ...meta,
+      timestamp: new Date().toISOString(),
+    });
+    logger.debug(LOG_CTX.HEARTBEAT, "Heartbeat sent", meta);
+    return true;
+  } catch (err) {
+    const { reason, status } = extractError(err);
+    logger.warn(LOG_CTX.HEARTBEAT, "Heartbeat failed", { reason, status });
+    return false;
+  }
+}
+
+// ── Voice join ─────────────────────────────────────────────────────────────────
 
 export async function voiceJoin(payload: {
-  channelId:       string;
-  userId:          string;
-  username:        string;
-}): Promise<{ ok: true; data: VoiceJoinResponse } | { ok: false; reason: string; status: number }> {
+  channelId: string;
+  userId:    string;
+  username:  string;
+}): Promise<{ ok: true; data: VoiceJoinResponse } | ApiFailure> {
   try {
     const res = await http.post<{ data: VoiceJoinResponse }>("/api/voice/join", {
       channelId: payload.channelId,
@@ -43,17 +91,17 @@ export async function voiceJoin(payload: {
     });
     return { ok: true, data: res.data.data };
   } catch (err) {
-    const status = err instanceof AxiosError ? (err.response?.status ?? 500) : 500;
-    const reason = apiError(err);
-    logger.warn("ApiService", "voiceJoin failed", { payload, reason, status });
+    const { reason, status } = logApiError("voiceJoin", payload, err);
     return { ok: false, reason, status };
   }
 }
 
+// ── Voice leave ────────────────────────────────────────────────────────────────
+
 export async function voiceLeave(payload: {
   channelId: string;
   userId:    string;
-}): Promise<{ ok: true; data: VoiceLeaveResponse } | { ok: false; reason: string }> {
+}): Promise<{ ok: true; data: VoiceLeaveResponse } | ApiFailure> {
   try {
     const res = await http.post<{ data: VoiceLeaveResponse }>("/api/voice/leave", {
       channelId: payload.channelId,
@@ -61,20 +109,19 @@ export async function voiceLeave(payload: {
     });
     return { ok: true, data: res.data.data };
   } catch (err) {
-    const reason = apiError(err);
-    logger.warn("ApiService", "voiceLeave failed", { payload, reason });
-    return { ok: false, reason };
+    const { reason, status } = logApiError("voiceLeave", payload, err);
+    return { ok: false, reason, status };
   }
 }
 
-// ── Channel endpoints ──────────────────────────────────────────────────────────
+// ── Voice channels ─────────────────────────────────────────────────────────────
 
 export async function getVoiceChannels(): Promise<VoiceChannel[]> {
   try {
     const res = await http.get<{ data: VoiceChannel[] }>("/api/voice/channels");
     return res.data.data ?? [];
   } catch (err) {
-    logger.error("ApiService", "getVoiceChannels failed", { reason: apiError(err) });
+    logApiError("getVoiceChannels", {}, err);
     return [];
   }
 }
@@ -92,12 +139,13 @@ export async function createVoiceChannel(payload: {
     await http.post("/api/voice/channels", payload);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: apiError(err) };
+    const { reason } = extractError(err);
+    return { ok: false, error: reason };
   }
 }
 
 export async function updateVoiceChannelRule(payload: {
-  id:              string;
+  id:               string;
   durationMinutes?: number;
   cooldownSeconds?: number;
   maxPerDay?:       number;
@@ -107,18 +155,19 @@ export async function updateVoiceChannelRule(payload: {
     await http.patch("/api/voice/channels", payload);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: apiError(err) };
+    const { reason } = extractError(err);
+    return { ok: false, error: reason };
   }
 }
 
-// ── Stats endpoint ─────────────────────────────────────────────────────────────
+// ── Stats ──────────────────────────────────────────────────────────────────────
 
 export async function getVoiceStats(): Promise<VoiceStats | null> {
   try {
     const res = await http.get<{ data: { stats: VoiceStats } }>("/api/voice/stats");
     return res.data.data.stats;
   } catch (err) {
-    logger.error("ApiService", "getVoiceStats failed", { reason: apiError(err) });
+    logApiError("getVoiceStats", {}, err);
     return null;
   }
 }

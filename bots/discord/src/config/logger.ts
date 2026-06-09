@@ -32,6 +32,19 @@ function log(level: Level, context: string, message: string, meta?: Record<strin
   (level === "error" ? console.error : console.log)(`${prefix} ${message}${metaStr}`);
 }
 
+// ── Named contexts ─────────────────────────────────────────────────────────────
+
+export const LOG_CTX = {
+  VOICE_JOIN:           "VOICE_JOIN",
+  VOICE_LEAVE:          "VOICE_LEAVE",
+  LICENSE_CREATED:      "LICENSE_CREATED",
+  LICENSE_DEACTIVATED:  "LICENSE_DEACTIVATED",
+  API_ERROR:            "API_ERROR",
+  HEARTBEAT:            "HEARTBEAT",
+  BOT:                  "BOT",
+  CLIENT:               "CLIENT",
+} as const;
+
 export const logger = {
   debug: (ctx: string, msg: string, meta?: Record<string, unknown>) => log("debug", ctx, msg, meta),
   info:  (ctx: string, msg: string, meta?: Record<string, unknown>) => log("info",  ctx, msg, meta),

@@ -7,7 +7,7 @@ import Modal from "@/components/ui/Modal";
 import EmptyState from "@/components/ui/EmptyState";
 import SearchBar from "@/components/ui/SearchBar";
 import {
-  MessageCircle, Plus, Settings, Power, Mic,
+  MessageCircle, Plus, Settings, Mic,
   Users, Activity, Wifi, WifiOff,
   Timer, Clock, Key, ShieldCheck, BarChart2,
   RefreshCw, AlertCircle, Package, Pencil,
@@ -16,6 +16,7 @@ import {
   useVoiceStats, useVoiceSessions, useVoiceChannels, useVoiceCooldowns,
 } from "@/hooks/useVoice";
 import { useProducts } from "@/hooks/useProducts";
+import { useDiscordHeartbeat } from "@/hooks/useDiscordHeartbeat";
 import type { VoiceStats } from "@/types";
 
 type Tab = "channels" | "mapping" | "sessions" | "cooldowns" | "statistics" | "servers";
@@ -47,7 +48,11 @@ function previewKey(prefix: string) {
 
 // ── Bot Status Card ────────────────────────────────────────────────────────────
 
-function BotStatusCard({ online }: { online: boolean }) {
+function BotStatusCard({ online, uptime, guilds }: { online: boolean; uptime?: number; guilds?: number }) {
+  function fmtUptime(s: number) {
+    const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  }
   return (
     <div className="card card-p">
       <div className="flex items-start justify-between gap-3">
@@ -60,7 +65,9 @@ function BotStatusCard({ online }: { online: boolean }) {
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            {online ? "Voice Engine operativo" : "Configura el token para conectar"}
+            {online
+              ? `${guilds ?? 0} servidor(es) · uptime ${fmtUptime(uptime ?? 0)}`
+              : "Configura el token para conectar"}
           </p>
         </div>
         <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${online ? "bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" : "bg-secondary"}`} />
@@ -286,7 +293,7 @@ function VoiceChannelCard({ channel, onToggle, onEdit }: {
           <button className="icon-btn p-1 min-h-0 min-w-0"
             title={channel.active ? "Desactivar" : "Activar"}
             onClick={() => onToggle(channel.id, !channel.active)}>
-            <Power className={`w-3.5 h-3.5 ${channel.active ? "text-amber-400" : "text-green-400"}`} />
+            <ShieldCheck className={`w-3.5 h-3.5 ${channel.active ? "text-amber-400" : "text-green-400"}`} />
           </button>
         </div>
       </div>
@@ -668,7 +675,6 @@ function SessionsPanel() {
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 export default function DiscordPage() {
-  const [botOnline,   setBotOnline]   = useState(false);
   const [showConfig,  setShowConfig]  = useState(false);
   const [showModal,   setShowModal]   = useState(false);
   const [editChannel, setEditChannel] = useState<any>(null);
@@ -676,6 +682,8 @@ export default function DiscordPage() {
 
   const { data: products }                        = useProducts();
   const { stats, loading: statsLoading, refresh } = useVoiceStats(15_000);
+  const { data: botStatus }                       = useDiscordHeartbeat(30_000);
+  const botOnline = botStatus?.online ?? false;
 
   const productOptions = products.map((p) => ({ value: p.id, label: p.name }));
   const openAdd  = () => { setEditChannel(null); setShowModal(true); };
@@ -697,10 +705,6 @@ export default function DiscordPage() {
         subtitle="Voice Licensing Engine — canales, sesiones, product mapping"
         actions={
           <div className="flex items-center gap-2">
-            <button className="btn-secondary gap-1.5 text-xs py-1.5" onClick={() => setBotOnline((v) => !v)}>
-              <Power className="w-3.5 h-3.5" />
-              {botOnline ? "Simular offline" : "Simular online"}
-            </button>
             <button className="btn-primary gap-1.5" onClick={() => setShowConfig(true)}>
               <Settings className="w-4 h-4" />
               {botOnline ? "Configurar" : "Conectar bot"}
@@ -713,7 +717,7 @@ export default function DiscordPage() {
 
         {/* Status row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <BotStatusCard online={botOnline} />
+          <BotStatusCard online={botOnline} uptime={botStatus?.uptime} guilds={botStatus?.guilds} />
           <div className="card card-p">
             <p className="text-xs text-muted-foreground mb-1">Sesiones activas</p>
             <div className="flex items-center gap-2">
