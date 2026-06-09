@@ -1,0 +1,241 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Core palette ── */
+    --background:           222 30% 4%;
+    --foreground:           220 15% 92%;
+    --card:                 222 28% 6%;
+    --card-foreground:      220 15% 92%;
+    --primary:              4 63% 47%;
+    --primary-foreground:   0 0% 100%;
+    --secondary:            222 22% 10%;
+    --secondary-foreground: 220 15% 92%;
+    --muted:                222 22% 10%;
+    --muted-foreground:     220 12% 52%;
+    --accent:               222 20% 14%;
+    --accent-foreground:    220 15% 92%;
+    --destructive:          4 63% 40%;
+    --destructive-foreground: 0 0% 100%;
+    --border:               222 18% 14%;
+    --input:                222 20% 10%;
+    --ring:                 4 63% 47%;
+    --radius:               0.5rem;
+
+    /* ── Design tokens ── */
+    --bg-elevated:    #0d1017;
+    --bg-card-hover:  #131722;
+    --border-soft:    #1a1d26;
+
+    /* ── GianCore brand ── */
+    --theme-primary:  #c0392b;
+    --theme-rgb:      192, 57, 43;
+    --theme-soft:     rgba(192, 57, 43, 0.08);
+    --theme-muted:    rgba(192, 57, 43, 0.12);
+    --theme-border:   rgba(192, 57, 43, 0.25);
+    --theme-glow:     0 0 0 3px rgba(192, 57, 43, 0.18);
+    --theme-fg:       #ffffff;
+
+    /* ── Status colors ── */
+    --clr-green:  158 64% 35%;
+    --clr-amber:  40 80% 45%;
+    --clr-red:    4 63% 47%;
+    --clr-blue:   220 60% 55%;
+    --clr-purple: 262 60% 55%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  ::-webkit-scrollbar       { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #1e2230; border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: #2a2f40; }
+
+  ::selection { background: rgba(192, 57, 43, 0.25); color: #fff; }
+
+  *:focus-visible {
+    outline: none;
+    box-shadow: var(--theme-glow);
+    border-radius: var(--radius);
+  }
+}
+
+@layer utilities {
+  /* ── Page ── */
+  .page-content    { @apply w-full min-w-0 overflow-x-hidden; }
+  .page-header     { @apply flex items-start justify-between gap-3 flex-wrap; }
+  .page-title      { @apply text-xl sm:text-2xl font-bold leading-tight; }
+  .page-subtitle   { @apply text-muted-foreground text-xs sm:text-sm mt-0.5; }
+
+  /* ── Cards ── */
+  .card {
+    @apply bg-card border border-border rounded-xl overflow-hidden min-w-0
+           transition-colors duration-150;
+  }
+  .card-hover { @apply hover:border-border/80; }
+  .card-hover:hover { background: var(--bg-card-hover); border-color: var(--theme-border); }
+  .card-p { @apply p-3 sm:p-4 md:p-5; }
+
+  /* ── Buttons ── */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 font-medium rounded-lg
+           text-sm px-4 py-2 transition-all duration-150 active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed shrink-0 whitespace-nowrap;
+    background: var(--theme-primary);
+    color: var(--theme-fg);
+  }
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.12);
+    box-shadow: 0 4px 16px rgba(var(--theme-rgb), 0.3);
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 font-medium rounded-lg
+           bg-secondary hover:bg-accent text-foreground text-sm px-4 py-2 border border-border
+           transition-all duration-150 active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed shrink-0 whitespace-nowrap;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 font-medium rounded-lg
+           text-white text-sm px-4 py-2 transition-all duration-150 active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed shrink-0 whitespace-nowrap;
+    background: rgba(192, 57, 43, 0.9);
+  }
+  .btn-danger:hover:not(:disabled) { background: #c0392b; }
+
+  /* ── Inputs ── */
+  .input-base {
+    @apply w-full bg-input border border-border rounded-lg px-3 py-2 text-sm
+           text-foreground placeholder:text-muted-foreground
+           transition-all duration-150 focus:outline-none
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .input-base:focus { box-shadow: var(--theme-glow); border-color: var(--theme-border); }
+
+  /* ── Action rows ── */
+  .action-row { @apply flex items-center flex-wrap gap-1.5; }
+  .icon-btn {
+    @apply p-1.5 rounded-md text-muted-foreground transition-all duration-150
+           hover:text-foreground active:scale-95 shrink-0
+           min-h-[36px] min-w-[36px] flex items-center justify-center;
+  }
+  .icon-btn:hover { background: var(--theme-soft); }
+  .icon-btn-danger {
+    @apply p-1.5 rounded-md text-muted-foreground transition-all duration-150
+           hover:text-red-400 active:scale-95 shrink-0
+           min-h-[36px] min-w-[36px] flex items-center justify-center;
+  }
+  .icon-btn-danger:hover { background: rgba(192, 57, 43, 0.10); }
+
+  /* ── Grids ── */
+  .grid-2  { @apply grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4; }
+  .grid-3  { @apply grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4; }
+  .grid-4  { @apply grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4; }
+
+  /* ── Table ── */
+  .table-wrap { @apply overflow-x-auto w-full min-w-0; }
+  .table-base { @apply w-full text-sm min-w-[480px]; }
+  .table-row-hover:hover { background: #10131a; }
+
+  /* ── Modals ── */
+  .modal-overlay {
+    @apply fixed inset-0 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+  }
+  .modal-box {
+    @apply bg-card border border-border w-full rounded-t-2xl sm:rounded-xl
+           max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6 sm:max-w-md shadow-2xl;
+  }
+
+  /* ── Badges ── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-green  { @apply badge bg-green-500/10  text-green-400  border border-green-500/20; }
+  .badge-red    { @apply badge bg-red-500/10    text-red-400    border border-red-500/20; }
+  .badge-amber  { @apply badge bg-amber-500/10  text-amber-400  border border-amber-500/20; }
+  .badge-blue   { @apply badge bg-blue-500/10   text-blue-400   border border-blue-500/20; }
+  .badge-purple { @apply badge bg-purple-500/10 text-purple-400 border border-purple-500/20; }
+  .badge-muted  { @apply badge bg-secondary     text-muted-foreground border border-border; }
+
+  /* ── Glass ── */
+  .glass {
+    background: rgba(13, 16, 23, 0.7);
+    border: 1px solid var(--border-soft);
+    backdrop-filter: blur(12px);
+  }
+
+  /* ── Text ── */
+  .text-gradient {
+    background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.65) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .text-gradient-red {
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .text-truncate  { @apply truncate min-w-0 max-w-full; }
+
+  /* ── Status dot ── */
+  .status-dot { @apply inline-block w-1.5 h-1.5 rounded-full shrink-0; }
+
+  /* ── Skeleton ── */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--secondary)) 25%,
+      hsl(var(--accent)) 50%,
+      hsl(var(--secondary)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+
+  /* ── Animations ── */
+  .page-enter {
+    animation: page-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .fade-in {
+    animation: fade-in 0.15s ease-out;
+  }
+  .modal-enter {
+    animation: modal-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes page-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes modal-in {
+    from { opacity: 0; transform: scale(0.96) translateY(8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+  }
+
+  kbd {
+    @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono
+           text-muted-foreground border border-border bg-secondary/60;
+  }
+}

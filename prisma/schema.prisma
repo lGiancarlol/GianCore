@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Roles & Permissions ────────────────────────────────────────────────────────
+
+enum UserRole {
+  owner
+  admin
+  reseller
+  support
+}
+
+model Permission {
+  id    String @id @default(cuid())
+  key   String @unique // e.g. "licenses:create"
+  label String
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  role         UserRole
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([role, permissionId])
+  @@map("role_permissions")
+}
+
+// ── Users ──────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+  role         UserRole @default(reseller)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  creditWallet  CreditWallet?
+  licenses      License[]
+  auditLogs     AuditLog[]
+  telegramAccount TelegramAccount?
+
+  @@map("users")
+}
+
+// ── Credits ────────────────────────────────────────────────────────────────────
+
+model CreditWallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("credit_wallets")
+}
+
+// ── Products ───────────────────────────────────────────────────────────────────
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  price       Int      @default(0) // in credits
+  active      Boolean  @default(true)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  licenses License[]
+
+  @@map("products")
+}
+
+// ── Licenses ───────────────────────────────────────────────────────────────────
+
+enum LicenseStatus {
+  active
+  inactive
+  expired
+  banned
+}
+
+model License {
+  id         String        @id @default(cuid())
+  key        String        @unique @default(cuid())
+  userId     String
+  productId  String
+  status     LicenseStatus @default(active)
+  expiresAt  DateTime?
+  metadata   Json?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("licenses")
+}
+
+// ── Discord ────────────────────────────────────────────────────────────────────
+
+model DiscordChannel {
+  id        String   @id @default(cuid())
+  guildId   String
+  channelId String   @unique
+  name      String
+  type      String   // text | voice | category
+  active    Boolean  @default(true)
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  voiceSessions VoiceSession[]
+
+  @@map("discord_channels")
+}
+
+model VoiceSession {
+  id        String   @id @default(cuid())
+  channelId String
+  userId    String   // Discord user ID
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+
+  channel DiscordChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@map("voice_sessions")
+}
+
+// ── Telegram ───────────────────────────────────────────────────────────────────
+
+model TelegramAccount {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  telegramId String   @unique
+  username   String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("telegram_accounts")
+}
+
+// ── Integrations ───────────────────────────────────────────────────────────────
+
+model Integration {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // webhook | api | bot | etc.
+  active    Boolean  @default(true)
+  config    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("integrations")
+}
+
+// ── Audit Logs ─────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+// ── Settings ───────────────────────────────────────────────────────────────────
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
