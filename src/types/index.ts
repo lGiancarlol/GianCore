@@ -7,24 +7,30 @@ export const ROLES: UserRole[] = ["owner", "admin", "reseller", "support"];
 // ── User ───────────────────────────────────────────────────────────────────────
 
 export interface User {
-  id:        string;
-  email:     string;
-  username:  string;
-  role:      UserRole;
-  active:    boolean;
-  createdAt: string;
-  updatedAt: string;
+  id:            string;
+  email?:        string;
+  username:      string;
+  role:          UserRole;
+  active:        boolean;
+  discordId?:    string;
+  discordAvatar?: string;
+  createdAt:     string;
+  updatedAt:     string;
   creditWallet?: CreditWallet;
+  wallet?:       Wallet;
 }
 
 export interface SessionUser {
-  id:       string;
-  email:    string;
-  username: string;
-  role:     UserRole;
+  id:         string;
+  email?:     string;
+  username:   string;
+  role:       UserRole;
+  discordId?: string;
+  provider?:  string;
+  image?:     string;
 }
 
-// ── Credits ────────────────────────────────────────────────────────────────────
+// ── Credits / Wallet ──────────────────────────────────────────────────────────
 
 export interface CreditWallet {
   id:      string;
@@ -32,18 +38,48 @@ export interface CreditWallet {
   balance: number;
 }
 
+export interface Wallet {
+  id:        string;
+  userId:    string;
+  balance:   number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TransactionType =
+  | "credit_add"
+  | "credit_remove"
+  | "license_created"
+  | "refund"
+  | "transfer_in"
+  | "transfer_out";
+
+export interface CreditTransaction {
+  id:           string;
+  walletId:     string;
+  amount:       number;
+  type:         TransactionType;
+  reason?:      string;
+  createdById?: string;
+  createdAt:    string;
+}
+
+export interface WalletWithTransactions extends Wallet {
+  transactions: CreditTransaction[];
+}
+
 // ── Products ───────────────────────────────────────────────────────────────────
 
 export interface Product {
-  id:          string;
-  name:        string;
-  slug:        string;
+  id:           string;
+  name:         string;
+  slug:         string;
   description?: string;
-  price:       number;
-  active:      boolean;
-  metadata?:   Record<string, unknown>;
-  createdAt:   string;
-  updatedAt:   string;
+  price:        number;
+  active:       boolean;
+  metadata?:    Record<string, unknown>;
+  createdAt:    string;
+  updatedAt:    string;
 }
 
 // ── Licenses ───────────────────────────────────────────────────────────────────
@@ -89,29 +125,31 @@ export interface DiscordChannel {
 }
 
 export interface VoiceRule {
-  id:              string;
-  channelId:       string;
-  productId:       string;
-  enabled:         boolean;
-  durationMinutes: number;
-  cooldownSeconds: number;
-  maxPerDay:       number;
-  createdAt:       string;
-  updatedAt:       string;
-  product?:        Pick<Product, "id" | "name" | "slug">;
+  id:               string;
+  channelId:        string;
+  productId:        string;
+  enabled:          boolean;
+  durationMinutes:  number;
+  cooldownSeconds:  number;
+  maxPerDay:        number;
+  licensePrefix?:   string;
+  licenseTemplate?: string;
+  createdAt:        string;
+  updatedAt:        string;
+  product?:         Pick<Product, "id" | "name" | "slug">;
 }
 
 export interface VoiceSession {
-  id:              string;
-  channelId:       string;
-  discordUserId:   string;
-  discordUsername: string;
-  licenseId?:      string;
-  joinedAt:        string;
-  leftAt?:         string;
+  id:               string;
+  channelId:        string;
+  discordUserId:    string;
+  discordUsername:  string;
+  licenseId?:       string;
+  joinedAt:         string;
+  leftAt?:          string;
   durationSeconds?: number;
-  channel?:        Pick<DiscordChannel, "id" | "name" | "channelId">;
-  license?:        Pick<License, "id" | "key" | "status">;
+  channel?:         Pick<DiscordChannel, "id" | "name" | "channelId">;
+  license?:         Pick<License, "id" | "key" | "status">;
 }
 
 export interface VoiceCooldown {

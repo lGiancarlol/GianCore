@@ -7,10 +7,10 @@ import Modal from "@/components/ui/Modal";
 import EmptyState from "@/components/ui/EmptyState";
 import SearchBar from "@/components/ui/SearchBar";
 import {
-  MessageCircle, Plus, Settings, Power, Mic, Hash,
-  Users, Activity, Wifi, WifiOff, ChevronRight,
+  MessageCircle, Plus, Settings, Power, Mic,
+  Users, Activity, Wifi, WifiOff,
   Timer, Clock, Key, ShieldCheck, BarChart2,
-  RefreshCw, CheckCircle2, XCircle, AlertCircle,
+  RefreshCw, AlertCircle, Package, Pencil,
 } from "lucide-react";
 import {
   useVoiceStats, useVoiceSessions, useVoiceChannels, useVoiceCooldowns,
@@ -18,16 +18,14 @@ import {
 import { useProducts } from "@/hooks/useProducts";
 import type { VoiceStats } from "@/types";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-type Tab = "channels" | "sessions" | "cooldowns" | "statistics" | "servers";
+type Tab = "channels" | "mapping" | "sessions" | "cooldowns" | "statistics" | "servers";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function formatDuration(seconds: number) {
-  if (seconds < 60)   return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+function formatDuration(s: number) {
+  if (s < 60)   return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
 }
 
 function formatDate(iso: string) {
@@ -41,6 +39,12 @@ function timeLeft(iso: string) {
   return formatDuration(Math.floor(diff / 1000));
 }
 
+function randSeg() { return Math.random().toString(36).substring(2, 6).toUpperCase(); }
+function previewKey(prefix: string) {
+  const seg = `${randSeg()}-${randSeg()}-${randSeg()}-${randSeg()}`;
+  return prefix ? `${prefix.toUpperCase()}-${seg}` : seg;
+}
+
 // ── Bot Status Card ────────────────────────────────────────────────────────────
 
 function BotStatusCard({ online }: { online: boolean }) {
@@ -50,9 +54,7 @@ function BotStatusCard({ online }: { online: boolean }) {
         <div>
           <p className="text-xs text-muted-foreground mb-1">Estado del bot</p>
           <div className="flex items-center gap-2">
-            {online
-              ? <Wifi    className="w-4 h-4 text-green-400" />
-              : <WifiOff className="w-4 h-4 text-muted-foreground" />}
+            {online ? <Wifi className="w-4 h-4 text-green-400" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
             <span className={`text-sm font-semibold ${online ? "text-green-400" : "text-muted-foreground"}`}>
               {online ? "Conectado" : "Desconectado"}
             </span>
@@ -61,10 +63,22 @@ function BotStatusCard({ online }: { online: boolean }) {
             {online ? "Voice Engine operativo" : "Configura el token para conectar"}
           </p>
         </div>
-        <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${
-          online ? "bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" : "bg-secondary"
-        }`} />
+        <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${online ? "bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" : "bg-secondary"}`} />
       </div>
+    </div>
+  );
+}
+
+// ── Metric helper ──────────────────────────────────────────────────────────────
+
+function Metric({ icon: Icon, label, value, center }: { icon: any; label: string; value: string; center?: boolean }) {
+  return (
+    <div className={`text-center ${center ? "border-x border-border" : ""}`}>
+      <div className="flex items-center justify-center gap-1 mb-0.5">
+        <Icon className="w-3 h-3 text-muted-foreground" />
+        <p className="text-[10px] text-muted-foreground">{label}</p>
+      </div>
+      <p className="text-xs font-semibold text-foreground">{value}</p>
     </div>
   );
 }
@@ -72,8 +86,8 @@ function BotStatusCard({ online }: { online: boolean }) {
 // ── Bot Config Modal ───────────────────────────────────────────────────────────
 
 function BotConfigModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [token,   setToken]   = useState("");
-  const [prefix,  setPrefix]  = useState("!");
+  const [token, setToken]   = useState("");
+  const [prefix, setPrefix] = useState("!");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,9 +95,8 @@ function BotConfigModal({ open, onClose }: { open: boolean; onClose: () => void 
     setLoading(true);
     try {
       await fetch("/api/integrations", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ name: "Discord Bot", type: "discord", config: { token, prefix } }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Discord Bot", type: "discord", config: { token, prefix } }),
       });
       onClose();
     } finally { setLoading(false); }
@@ -107,8 +120,7 @@ function BotConfigModal({ open, onClose }: { open: boolean; onClose: () => void 
         </div>
         <div>
           <label className="text-xs text-muted-foreground mb-1.5 block">Prefijo de comandos</label>
-          <input className="input-base w-24" maxLength={3}
-            value={prefix} onChange={(e) => setPrefix(e.target.value)} />
+          <input className="input-base w-24" maxLength={3} value={prefix} onChange={(e) => setPrefix(e.target.value)} />
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
@@ -121,16 +133,26 @@ function BotConfigModal({ open, onClose }: { open: boolean; onClose: () => void 
   );
 }
 
-// ── Add Voice Channel Modal ────────────────────────────────────────────────────
+// ── Channel Modal (create + edit) ──────────────────────────────────────────────
 
-function AddChannelModal({ open, onClose, productOptions, onSaved }: {
+function ChannelModal({ open, onClose, productOptions, onSaved, existing }: {
   open: boolean; onClose: () => void;
   productOptions: { value: string; label: string }[];
   onSaved: () => void;
+  existing?: any;
 }) {
+  const isEdit = !!existing;
+  const rule   = existing?.voiceRule;
+
   const [form, setForm] = useState({
-    guildId: "", channelId: "", name: "", productId: "",
-    durationMinutes: "60", cooldownSeconds: "300", maxPerDay: "100",
+    guildId:         existing?.guild?.guildId    ?? "",
+    channelId:       existing?.channelId          ?? "",
+    name:            existing?.name               ?? "",
+    productId:       rule?.productId              ?? "",
+    durationMinutes: String(rule?.durationMinutes ?? 60),
+    cooldownSeconds: String(rule?.cooldownSeconds ?? 300),
+    maxPerDay:       String(rule?.maxPerDay       ?? 100),
+    licensePrefix:   rule?.licensePrefix          ?? "",
   });
   const [loading, setLoading] = useState(false);
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -139,58 +161,65 @@ function AddChannelModal({ open, onClose, productOptions, onSaved }: {
     e.preventDefault();
     setLoading(true);
     try {
+      const payload = {
+        ...(isEdit ? { id: existing.id } : { guildId: form.guildId, channelId: form.channelId, name: form.name }),
+        productId:       form.productId,
+        durationMinutes: parseInt(form.durationMinutes),
+        cooldownSeconds: parseInt(form.cooldownSeconds),
+        maxPerDay:       parseInt(form.maxPerDay),
+        licensePrefix:   form.licensePrefix.trim().toUpperCase() || null,
+      };
       await fetch("/api/voice/channels", {
-        method:  "POST",
+        method:  isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          ...form,
-          durationMinutes: parseInt(form.durationMinutes),
-          cooldownSeconds: parseInt(form.cooldownSeconds),
-          maxPerDay:       parseInt(form.maxPerDay),
-        }),
+        body:    JSON.stringify(payload),
       });
       onSaved();
       onClose();
     } finally { setLoading(false); }
   };
 
+  const preview = previewKey(form.licensePrefix);
+
   return (
-    <Modal open={open} onClose={onClose} title="Configurar canal de voz" size="lg">
+    <Modal open={open} onClose={onClose} title={isEdit ? "Editar canal" : "Configurar canal de voz"} size="lg">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs text-muted-foreground mb-1.5 block">Guild ID *</label>
-            <input required className="input-base font-mono" placeholder="000000000000000000"
-              value={form.guildId} onChange={(e) => set("guildId")(e.target.value)} />
+        {!isEdit && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Guild ID *</label>
+              <input required className="input-base font-mono" placeholder="000000000000000000"
+                value={form.guildId} onChange={(e) => set("guildId")(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Channel ID *</label>
+              <input required className="input-base font-mono" placeholder="000000000000000000"
+                value={form.channelId} onChange={(e) => set("channelId")(e.target.value)} />
+            </div>
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1.5 block">Channel ID *</label>
-            <input required className="input-base font-mono" placeholder="000000000000000000"
-              value={form.channelId} onChange={(e) => set("channelId")(e.target.value)} />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        )}
+
+        {!isEdit && (
           <div>
             <label className="text-xs text-muted-foreground mb-1.5 block">Nombre del canal *</label>
-            <input required className="input-base" placeholder="gaming-lounge"
+            <input required className="input-base" placeholder="🎤 FREE FIRE 1 HORA"
               value={form.name} onChange={(e) => set("name")(e.target.value)} />
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1.5 block">Producto (licencia) *</label>
-            <select required className="input-base" value={form.productId}
-              onChange={(e) => set("productId")(e.target.value)}>
-              <option value="">Seleccionar producto...</option>
-              {productOptions.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-          </div>
+        )}
+
+        <div>
+          <label className="text-xs text-muted-foreground mb-1.5 block">Producto *</label>
+          <select required className="input-base" value={form.productId}
+            onChange={(e) => set("productId")(e.target.value)}>
+            <option value="">Seleccionar producto...</option>
+            {productOptions.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
         </div>
 
         {/* Rule fields */}
         <div className="rounded-lg border border-border p-3 space-y-3 bg-secondary/20">
           <p className="text-xs font-semibold text-foreground">Reglas de la licencia</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1.5 block">Duración (min)</label>
               <input type="number" min="1" className="input-base"
@@ -202,18 +231,28 @@ function AddChannelModal({ open, onClose, productOptions, onSaved }: {
                 value={form.cooldownSeconds} onChange={(e) => set("cooldownSeconds")(e.target.value)} />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1.5 block">Máx. por día</label>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Máx/día</label>
               <input type="number" min="1" className="input-base"
                 value={form.maxPerDay} onChange={(e) => set("maxPerDay")(e.target.value)} />
             </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1.5 block">Prefijo key</label>
+              <input className="input-base font-mono" placeholder="FF" maxLength={8}
+                value={form.licensePrefix}
+                onChange={(e) => set("licensePrefix")(e.target.value.toUpperCase())} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-[10px] text-muted-foreground">Preview:</span>
+            <code className="text-[11px] font-mono text-foreground bg-secondary px-2 py-0.5 rounded">{preview}</code>
           </div>
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
           <button type="submit" className="btn-primary"
-            disabled={loading || !form.channelId || !form.guildId || !form.productId}>
-            {loading ? "Guardando..." : "Guardar canal"}
+            disabled={loading || !form.productId || (!isEdit && (!form.channelId || !form.guildId || !form.name))}>
+            {loading ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear canal"}
           </button>
         </div>
       </form>
@@ -223,8 +262,8 @@ function AddChannelModal({ open, onClose, productOptions, onSaved }: {
 
 // ── Voice Channel Card ─────────────────────────────────────────────────────────
 
-function VoiceChannelCard({ channel, onToggle }: {
-  channel: any; onToggle: (id: string, active: boolean) => void;
+function VoiceChannelCard({ channel, onToggle, onEdit }: {
+  channel: any; onToggle: (id: string, active: boolean) => void; onEdit: (ch: any) => void;
 }) {
   const rule = channel.voiceRule;
   return (
@@ -237,48 +276,49 @@ function VoiceChannelCard({ channel, onToggle }: {
             <code className="text-[10px] text-muted-foreground font-mono">{channel.channelId}</code>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <Badge variant={channel.active && rule?.enabled ? "green" : "muted"}>
             {channel.active && rule?.enabled ? "Activo" : "Inactivo"}
           </Badge>
-          <button
-            className="icon-btn p-1 min-h-0 min-w-0"
+          <button className="icon-btn p-1 min-h-0 min-w-0" title="Editar" onClick={() => onEdit(channel)}>
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button className="icon-btn p-1 min-h-0 min-w-0"
             title={channel.active ? "Desactivar" : "Activar"}
-            onClick={() => onToggle(channel.id, !channel.active)}
-          >
+            onClick={() => onToggle(channel.id, !channel.active)}>
             <Power className={`w-3.5 h-3.5 ${channel.active ? "text-amber-400" : "text-green-400"}`} />
           </button>
         </div>
       </div>
 
-      {/* Guild */}
       {channel.guild && (
         <p className="text-[10px] text-muted-foreground truncate">
           Servidor: <span className="text-foreground">{channel.guild.name}</span>
         </p>
       )}
 
-      {/* Rule stats */}
       {rule ? (
-        <div className="grid grid-cols-3 gap-2 pt-1 border-t border-border">
-          <Metric icon={Timer} label="Duración"  value={`${rule.durationMinutes}m`} />
-          <Metric icon={Clock} label="Cooldown"  value={rule.cooldownSeconds ? `${rule.cooldownSeconds}s` : "Sin"} center />
-          <Metric icon={Key}   label="Máx/día"   value={String(rule.maxPerDay)} />
-        </div>
+        <>
+          <div className="grid grid-cols-3 gap-2 pt-1 border-t border-border">
+            <Metric icon={Timer} label="Duración" value={`${rule.durationMinutes}m`} />
+            <Metric icon={Clock} label="Cooldown" value={rule.cooldownSeconds ? `${rule.cooldownSeconds}s` : "Sin"} center />
+            <Metric icon={Key}   label="Máx/día"  value={String(rule.maxPerDay)} />
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+            <span>Producto: <span className="text-foreground">{rule.product?.name ?? "—"}</span></span>
+            {rule.licensePrefix && (
+              <code className="font-mono text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
+                {rule.licensePrefix}-****
+              </code>
+            )}
+          </div>
+        </>
       ) : (
         <p className="text-[11px] text-amber-400 flex items-center gap-1 pt-1 border-t border-border">
           <AlertCircle className="w-3 h-3" /> Sin regla configurada
         </p>
       )}
 
-      {/* Product */}
-      {rule?.product && (
-        <p className="text-[10px] text-muted-foreground">
-          Producto: <span className="text-foreground">{rule.product.name}</span>
-        </p>
-      )}
-
-      {/* Active sessions count */}
       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
         <Activity className="w-3 h-3" />
         <span>{channel._count?.voiceSessions ?? 0} sesión(es) activa(s)</span>
@@ -287,16 +327,143 @@ function VoiceChannelCard({ channel, onToggle }: {
   );
 }
 
-function Metric({ icon: Icon, label, value, center }: {
-  icon: any; label: string; value: string; center?: boolean;
-}) {
+// ── Channels Panel ─────────────────────────────────────────────────────────────
+
+function ChannelsPanel({ onAdd, onEdit }: { onAdd: () => void; onEdit: (ch: any) => void }) {
+  const { data: channels, loading, refresh } = useVoiceChannels();
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return !q ? channels : channels.filter((c) => c.name.toLowerCase().includes(q) || c.channelId.includes(q));
+  }, [channels, search]);
+
+  const handleToggle = async (id: string, active: boolean) => {
+    await fetch("/api/voice/channels", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, active }),
+    });
+    refresh();
+  };
+
   return (
-    <div className={`text-center ${center ? "border-x border-border" : ""}`}>
-      <div className="flex items-center justify-center gap-1 mb-0.5">
-        <Icon className="w-3 h-3 text-muted-foreground" />
-        <p className="text-[10px] text-muted-foreground">{label}</p>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchBar value={search} onChange={setSearch} placeholder="Buscar canal..." className="w-full sm:w-72" />
+        <button className="btn-secondary gap-1.5" onClick={refresh}><RefreshCw className="w-3.5 h-3.5" /> Actualizar</button>
+        <button className="btn-primary gap-1.5" onClick={onAdd}><Plus className="w-4 h-4" /> Agregar canal</button>
       </div>
-      <p className="text-xs font-semibold text-foreground">{value}</p>
+      {loading ? (
+        <div className="grid-3">{[...Array(3)].map((_, i) => <div key={i} className="skeleton h-40 rounded-xl" />)}</div>
+      ) : filtered.length === 0 ? (
+        <div className="card">
+          <EmptyState icon={Mic} title="Sin canales configurados"
+            description="Agrega canales de voz con reglas de licenciamiento."
+            action={<button className="btn-primary" onClick={onAdd}><Plus className="w-4 h-4" /> Agregar canal</button>} />
+        </div>
+      ) : (
+        <div className="grid-3">
+          {filtered.map((c) => <VoiceChannelCard key={c.id} channel={c} onToggle={handleToggle} onEdit={onEdit} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Product Mapping Panel ──────────────────────────────────────────────────────
+
+function ProductMappingPanel({ onAdd, onEdit }: { onAdd: () => void; onEdit: (ch: any) => void }) {
+  const { data: channels, loading, refresh } = useVoiceChannels();
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return !q ? channels : channels.filter(
+      (c) => c.name.toLowerCase().includes(q) ||
+             (c.voiceRule as any)?.product?.name?.toLowerCase().includes(q) ||
+             (c.voiceRule as any)?.licensePrefix?.toLowerCase().includes(q)
+    );
+  }, [channels, search]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchBar value={search} onChange={setSearch}
+          placeholder="Buscar canal o producto..." className="w-full sm:w-72" />
+        <button className="btn-secondary gap-1.5" onClick={refresh}><RefreshCw className="w-3.5 h-3.5" /> Actualizar</button>
+        <button className="btn-primary gap-1.5" onClick={onAdd}><Plus className="w-4 h-4" /> Nuevo mapeo</button>
+      </div>
+      <div className="card">
+        {loading ? (
+          <div className="p-4 space-y-3">
+            {[...Array(4)].map((_, i) => <div key={i} className="skeleton h-12 rounded-lg" />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState icon={Package} title="Sin mapeos configurados"
+            description="Asocia canales de Discord con productos para generar licencias automáticamente."
+            action={<button className="btn-primary" onClick={onAdd}><Plus className="w-4 h-4" /> Crear mapeo</button>} />
+        ) : (
+          <div className="table-wrap">
+            <table className="table-base">
+              <thead>
+                <tr className="border-b border-border text-left bg-secondary/20">
+                  <th className="px-4 py-3 text-xs font-medium text-muted-foreground">Canal</th>
+                  <th className="px-4 py-3 text-xs font-medium text-muted-foreground">Producto</th>
+                  <th className="px-4 py-3 text-xs font-medium text-muted-foreground">Prefijo</th>
+                  <th className="px-4 py-3 text-xs font-medium text-muted-foreground">Formato de key</th>
+                  <th className="px-4 py-3 text-xs font-medium text-muted-foreground">Duración</th>
+                  <th className="px-4 py-3 text-xs font-medium text-muted-foreground">Cooldown</th>
+                  <th className="px-4 py-3 text-xs font-medium text-muted-foreground">Estado</th>
+                  <th className="px-4 py-3 text-xs font-medium text-muted-foreground text-right">Acc.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtered.map((ch) => {
+                  const rule   = ch.voiceRule as any;
+                  const prefix = rule?.licensePrefix;
+                  return (
+                    <tr key={ch.id} className="table-row-hover">
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <Mic className="w-3 h-3 text-blue-400 shrink-0" />
+                          <span className="text-xs text-foreground truncate max-w-[130px]">{ch.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                        {rule?.product?.name ?? <span className="italic">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {prefix
+                          ? <code className="text-xs font-mono text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">{prefix}</code>
+                          : <span className="text-xs text-muted-foreground italic">Sin prefijo</span>}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <code className="text-[10px] font-mono text-muted-foreground">
+                          {prefix ? `${prefix}-XXXX-XXXX-XXXX-XXXX` : "XXXX-XXXX-XXXX-XXXX"}
+                        </code>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                        {rule ? `${rule.durationMinutes}m` : "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                        {rule?.cooldownSeconds ? `${rule.cooldownSeconds}s` : "Sin"}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge variant={ch.active && rule?.enabled ? "green" : "muted"}>
+                          {ch.active && rule?.enabled ? "Activo" : "Inactivo"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <button className="icon-btn p-1 min-h-0 min-w-0" title="Editar" onClick={() => onEdit(ch)}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -305,22 +472,19 @@ function Metric({ icon: Icon, label, value, center }: {
 
 function StatisticsPanel({ stats, loading }: { stats: VoiceStats | null; loading: boolean }) {
   const items = [
-    { label: "Sesiones activas",    value: stats?.activeSessions, color: "text-blue-400",   bg: "rgba(52,152,219,0.1)",   border: "rgba(52,152,219,0.2)",   icon: Activity },
-    { label: "Licencias activas",   value: stats?.activeLicenses, color: "text-red-400",    bg: "rgba(192,57,43,0.1)",    border: "rgba(192,57,43,0.2)",    icon: Key      },
-    { label: "Usuarios conectados", value: stats?.connectedUsers, color: "text-green-400",  bg: "rgba(39,174,96,0.1)",    border: "rgba(39,174,96,0.2)",    icon: Users    },
-    { label: "Canales activos",     value: stats?.activeChannels, color: "text-purple-400", bg: "rgba(155,89,182,0.1)",   border: "rgba(155,89,182,0.2)",   icon: Mic      },
+    { label: "Sesiones activas",    value: stats?.activeSessions, color: "text-blue-400",   bg: "rgba(52,152,219,0.1)",   border: "rgba(52,152,219,0.2)",   icon: Activity  },
+    { label: "Licencias activas",   value: stats?.activeLicenses, color: "text-red-400",    bg: "rgba(192,57,43,0.1)",    border: "rgba(192,57,43,0.2)",    icon: Key       },
+    { label: "Usuarios conectados", value: stats?.connectedUsers, color: "text-green-400",  bg: "rgba(39,174,96,0.1)",    border: "rgba(39,174,96,0.2)",    icon: Users     },
+    { label: "Canales activos",     value: stats?.activeChannels, color: "text-purple-400", bg: "rgba(155,89,182,0.1)",   border: "rgba(155,89,182,0.2)",   icon: Mic       },
     { label: "Sesiones hoy",        value: stats?.totalToday,     color: "text-amber-400",  bg: "rgba(230,126,34,0.1)",   border: "rgba(230,126,34,0.2)",   icon: BarChart2 },
     { label: "Total histórico",     value: stats?.totalAllTime,   color: "text-foreground", bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)", icon: BarChart2 },
   ];
-
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {items.map(({ label, value, color, bg, border, icon: Icon }) => (
           <div key={label} className="card card-p">
-            {loading ? (
-              <div className="skeleton h-14 rounded-lg" />
-            ) : (
+            {loading ? <div className="skeleton h-14 rounded-lg" /> : (
               <>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-muted-foreground">{label}</p>
@@ -335,25 +499,21 @@ function StatisticsPanel({ stats, loading }: { stats: VoiceStats | null; loading
           </div>
         ))}
       </div>
-
-      {/* API info box */}
       <div className="card card-p space-y-3">
         <p className="text-xs font-semibold text-foreground">Endpoints del Voice Engine</p>
         <div className="space-y-2">
           {[
-            { method: "POST", path: "/api/voice/join",     desc: "Bot → usuario entra a canal de voz" },
-            { method: "POST", path: "/api/voice/leave",    desc: "Bot → usuario sale de canal de voz" },
+            { method: "POST", path: "/api/voice/join",     desc: "Bot → usuario entra a canal" },
+            { method: "POST", path: "/api/voice/leave",    desc: "Bot → usuario sale de canal" },
             { method: "GET",  path: "/api/voice/sessions", desc: "Sesiones activas / historial" },
-            { method: "GET",  path: "/api/voice/channels", desc: "Canales configurados con reglas" },
-            { method: "POST", path: "/api/voice/channels", desc: "Crear / actualizar canal con regla" },
-            { method: "GET",  path: "/api/voice/stats",    desc: "Estadísticas en tiempo real" },
+            { method: "GET",  path: "/api/voice/channels", desc: "Canales con reglas"           },
+            { method: "POST", path: "/api/voice/channels", desc: "Crear canal con regla"        },
+            { method: "GET",  path: "/api/voice/stats",    desc: "Estadísticas en tiempo real"  },
           ].map(({ method, path, desc }) => (
             <div key={path} className="flex items-center gap-3">
               <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${
                 method === "POST" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400"
-              }`}>
-                {method}
-              </span>
+              }`}>{method}</span>
               <code className="text-xs font-mono text-foreground">{path}</code>
               <span className="text-xs text-muted-foreground hidden sm:block">{desc}</span>
             </div>
@@ -369,7 +529,6 @@ function StatisticsPanel({ stats, loading }: { stats: VoiceStats | null; loading
 function CooldownsPanel() {
   const { data: cooldowns, loading, refresh } = useVoiceCooldowns();
   const [search, setSearch] = useState("");
-
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return !q ? cooldowns : cooldowns.filter(
@@ -380,21 +539,14 @@ function CooldownsPanel() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <SearchBar value={search} onChange={setSearch}
-          placeholder="Buscar por usuario o canal..." className="w-full sm:w-72" />
-        <button className="btn-secondary gap-1.5" onClick={refresh}>
-          <RefreshCw className="w-3.5 h-3.5" /> Actualizar
-        </button>
+        <SearchBar value={search} onChange={setSearch} placeholder="Buscar usuario o canal..." className="w-full sm:w-72" />
+        <button className="btn-secondary gap-1.5" onClick={refresh}><RefreshCw className="w-3.5 h-3.5" /> Actualizar</button>
       </div>
       <div className="card">
         {loading ? (
-          <div className="p-4 space-y-3">
-            {[...Array(5)].map((_, i) => <div key={i} className="skeleton h-10 rounded-lg" />)}
-          </div>
+          <div className="p-4 space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="skeleton h-10 rounded-lg" />)}</div>
         ) : filtered.length === 0 ? (
-          <EmptyState icon={Clock}
-            title="Sin cooldowns activos"
-            description="Aquí aparecerán los usuarios en período de cooldown." />
+          <EmptyState icon={Clock} title="Sin cooldowns activos" description="Aquí aparecerán los usuarios en período de cooldown." />
         ) : (
           <div className="table-wrap">
             <table className="table-base">
@@ -409,18 +561,10 @@ function CooldownsPanel() {
               <tbody className="divide-y divide-border">
                 {filtered.map((c) => (
                   <tr key={c.id} className="table-row-hover">
-                    <td className="px-4 py-2.5">
-                      <code className="text-xs font-mono text-foreground">{c.discordUserId}</code>
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                      {(c.channel as any)?.name ?? "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                      {formatDate(c.expiresAt)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <Badge variant="amber">{timeLeft(c.expiresAt)}</Badge>
-                    </td>
+                    <td className="px-4 py-2.5"><code className="text-xs font-mono text-foreground">{c.discordUserId}</code></td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{(c.channel as any)?.name ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{formatDate(c.expiresAt)}</td>
+                    <td className="px-4 py-2.5"><Badge variant="amber">{timeLeft(c.expiresAt)}</Badge></td>
                   </tr>
                 ))}
               </tbody>
@@ -438,43 +582,31 @@ function SessionsPanel() {
   const [onlyActive, setOnlyActive] = useState(false);
   const { data: sessions, loading, refresh } = useVoiceSessions(onlyActive);
   const [search, setSearch] = useState("");
-
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return !q ? sessions : sessions.filter(
-      (s) =>
-        s.discordUsername.toLowerCase().includes(q) ||
-        s.discordUserId.includes(q) ||
-        (s.channel as any)?.name?.toLowerCase().includes(q)
+      (s) => s.discordUsername.toLowerCase().includes(q) || s.discordUserId.includes(q) ||
+             (s.channel as any)?.name?.toLowerCase().includes(q)
     );
   }, [sessions, search]);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <SearchBar value={search} onChange={setSearch}
-          placeholder="Buscar por usuario o canal..." className="w-full sm:w-72" />
-        <button
-          onClick={() => setOnlyActive((v) => !v)}
-          className={`btn-secondary gap-1.5 ${onlyActive ? "border-[var(--theme-border)]" : ""}`}
-          style={onlyActive ? { background: "var(--theme-soft)", color: "var(--theme-primary)" } : undefined}
-        >
+        <SearchBar value={search} onChange={setSearch} placeholder="Buscar usuario o canal..." className="w-full sm:w-72" />
+        <button onClick={() => setOnlyActive((v) => !v)} className="btn-secondary gap-1.5"
+          style={onlyActive ? { background: "var(--theme-soft)", color: "var(--theme-primary)", borderColor: "var(--theme-border)" } : undefined}>
           <Activity className="w-3.5 h-3.5" />
           {onlyActive ? "Mostrando activas" : "Solo activas"}
         </button>
-        <button className="btn-secondary gap-1.5" onClick={refresh}>
-          <RefreshCw className="w-3.5 h-3.5" /> Actualizar
-        </button>
+        <button className="btn-secondary gap-1.5" onClick={refresh}><RefreshCw className="w-3.5 h-3.5" /> Actualizar</button>
       </div>
       <div className="card">
         {loading ? (
-          <div className="p-4 space-y-3">
-            {[...Array(6)].map((_, i) => <div key={i} className="skeleton h-11 rounded-lg" />)}
-          </div>
+          <div className="p-4 space-y-3">{[...Array(6)].map((_, i) => <div key={i} className="skeleton h-11 rounded-lg" />)}</div>
         ) : filtered.length === 0 ? (
-          <EmptyState icon={Activity}
-            title="Sin sesiones"
-            description={onlyActive ? "No hay sesiones activas en este momento." : "El historial de sesiones aparecerá aquí."} />
+          <EmptyState icon={Activity} title="Sin sesiones"
+            description={onlyActive ? "No hay sesiones activas." : "El historial aparecerá aquí."} />
         ) : (
           <div className="table-wrap">
             <table className="table-base">
@@ -493,8 +625,7 @@ function SessionsPanel() {
                   <tr key={s.id} className="table-row-hover">
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-secondary border border-border
-                          flex items-center justify-center text-[10px] font-semibold text-muted-foreground shrink-0">
+                        <div className="w-6 h-6 rounded-full bg-secondary border border-border flex items-center justify-center text-[10px] font-semibold text-muted-foreground shrink-0">
                           {s.discordUsername.charAt(0).toUpperCase()}
                         </div>
                         <div>
@@ -506,36 +637,22 @@ function SessionsPanel() {
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1.5">
                         <Mic className="w-3 h-3 text-blue-400 shrink-0" />
-                        <span className="text-xs text-muted-foreground">
-                          {(s.channel as any)?.name ?? "—"}
-                        </span>
+                        <span className="text-xs text-muted-foreground">{(s.channel as any)?.name ?? "—"}</span>
                       </div>
                     </td>
                     <td className="px-4 py-2.5">
-                      {s.license ? (
-                        <code className="text-[11px] font-mono text-muted-foreground">
-                          {(s.license as any).key?.slice(0, 14)}…
-                        </code>
-                      ) : <span className="text-xs text-muted-foreground">—</span>}
+                      {s.license
+                        ? <code className="text-[11px] font-mono text-muted-foreground">{(s.license as any).key?.slice(0, 18)}…</code>
+                        : <span className="text-xs text-muted-foreground">—</span>}
                     </td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                      {formatDate(s.joinedAt)}
-                    </td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDate(s.joinedAt)}</td>
                     <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                      {s.durationSeconds
-                        ? formatDuration(s.durationSeconds)
-                        : s.leftAt ? "—" : <Badge variant="green">Activa</Badge>}
+                      {s.durationSeconds ? formatDuration(s.durationSeconds) : s.leftAt ? "—" : <Badge variant="green">Activa</Badge>}
                     </td>
                     <td className="px-4 py-2.5">
                       {!s.leftAt
-                        ? <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                            <span className="text-xs text-green-400">En canal</span>
-                          </div>
-                        : <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">Finalizada</span>
-                          </div>}
+                        ? <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /><span className="text-xs text-green-400">En canal</span></div>
+                        : <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" /><span className="text-xs text-muted-foreground">Finalizada</span></div>}
                     </td>
                   </tr>
                 ))}
@@ -548,84 +665,28 @@ function SessionsPanel() {
   );
 }
 
-// ── Channels Panel ─────────────────────────────────────────────────────────────
-
-function ChannelsPanel({ onAddChannel }: { onAddChannel: () => void }) {
-  const { data: channels, loading, refresh } = useVoiceChannels();
-  const [search, setSearch] = useState("");
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return !q ? channels : channels.filter(
-      (c) => c.name.toLowerCase().includes(q) || c.channelId.includes(q)
-    );
-  }, [channels, search]);
-
-  const handleToggle = async (id: string, active: boolean) => {
-    await fetch("/api/voice/channels", {
-      method:  "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ id, active }),
-    });
-    refresh();
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <SearchBar value={search} onChange={setSearch}
-          placeholder="Buscar canal..." className="w-full sm:w-72" />
-        <button className="btn-secondary gap-1.5" onClick={refresh}>
-          <RefreshCw className="w-3.5 h-3.5" /> Actualizar
-        </button>
-        <button className="btn-primary gap-1.5" onClick={onAddChannel}>
-          <Plus className="w-4 h-4" /> Agregar canal
-        </button>
-      </div>
-      {loading ? (
-        <div className="grid-3">
-          {[...Array(3)].map((_, i) => <div key={i} className="skeleton h-40 rounded-xl" />)}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="card">
-          <EmptyState icon={Mic}
-            title="Sin canales configurados"
-            description="Agrega canales de voz con reglas de licenciamiento."
-            action={
-              <button className="btn-primary" onClick={onAddChannel}>
-                <Plus className="w-4 h-4" /> Agregar canal
-              </button>
-            } />
-        </div>
-      ) : (
-        <div className="grid-3">
-          {filtered.map((c) => (
-            <VoiceChannelCard key={c.id} channel={c} onToggle={handleToggle} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 export default function DiscordPage() {
-  const [botOnline,      setBotOnline]      = useState(false);
-  const [showConfig,     setShowConfig]     = useState(false);
-  const [showAddChannel, setShowAddChannel] = useState(false);
-  const [activeTab,      setActiveTab]      = useState<Tab>("channels");
+  const [botOnline,   setBotOnline]   = useState(false);
+  const [showConfig,  setShowConfig]  = useState(false);
+  const [showModal,   setShowModal]   = useState(false);
+  const [editChannel, setEditChannel] = useState<any>(null);
+  const [activeTab,   setActiveTab]   = useState<Tab>("channels");
 
-  const { data: products }                      = useProducts();
+  const { data: products }                        = useProducts();
   const { stats, loading: statsLoading, refresh } = useVoiceStats(15_000);
 
   const productOptions = products.map((p) => ({ value: p.id, label: p.name }));
+  const openAdd  = () => { setEditChannel(null); setShowModal(true); };
+  const openEdit = (ch: any) => { setEditChannel(ch); setShowModal(true); };
 
   const tabs: { id: Tab; label: string; icon: any }[] = [
-    { id: "channels",   label: "Canales de voz", icon: Mic        },
-    { id: "sessions",   label: "Sesiones",        icon: Activity   },
-    { id: "cooldowns",  label: "Cooldowns",       icon: Clock      },
-    { id: "statistics", label: "Estadísticas",    icon: BarChart2  },
+    { id: "channels",   label: "Canales",        icon: Mic           },
+    { id: "mapping",    label: "Product Mapping", icon: Package       },
+    { id: "sessions",   label: "Sesiones",        icon: Activity      },
+    { id: "cooldowns",  label: "Cooldowns",       icon: Clock         },
+    { id: "statistics", label: "Estadísticas",    icon: BarChart2     },
     { id: "servers",    label: "Servidores",      icon: MessageCircle },
   ];
 
@@ -633,11 +694,10 @@ export default function DiscordPage() {
     <>
       <Topbar
         title="Discord Manager"
-        subtitle="Voice Licensing Engine — gestión de canales, sesiones y reglas"
+        subtitle="Voice Licensing Engine — canales, sesiones, product mapping"
         actions={
           <div className="flex items-center gap-2">
-            <button className="btn-secondary gap-1.5 text-xs py-1.5"
-              onClick={() => setBotOnline((v) => !v)}>
+            <button className="btn-secondary gap-1.5 text-xs py-1.5" onClick={() => setBotOnline((v) => !v)}>
               <Power className="w-3.5 h-3.5" />
               {botOnline ? "Simular offline" : "Simular online"}
             </button>
@@ -658,40 +718,34 @@ export default function DiscordPage() {
             <p className="text-xs text-muted-foreground mb-1">Sesiones activas</p>
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-green-400" />
-              <span className="text-xl font-bold text-foreground">
-                {statsLoading ? "—" : (stats?.activeSessions ?? 0)}
-              </span>
+              <span className="text-xl font-bold text-foreground">{statsLoading ? "—" : (stats?.activeSessions ?? 0)}</span>
             </div>
           </div>
           <div className="card card-p">
             <p className="text-xs text-muted-foreground mb-1">Usuarios conectados</p>
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-blue-400" />
-              <span className="text-xl font-bold text-foreground">
-                {statsLoading ? "—" : (stats?.connectedUsers ?? 0)}
-              </span>
+              <span className="text-xl font-bold text-foreground">{statsLoading ? "—" : (stats?.connectedUsers ?? 0)}</span>
             </div>
           </div>
           <div className="card card-p">
             <p className="text-xs text-muted-foreground mb-1">Canales activos</p>
             <div className="flex items-center gap-2">
               <Mic className="w-4 h-4 text-purple-400" />
-              <span className="text-xl font-bold text-foreground">
-                {statsLoading ? "—" : (stats?.activeChannels ?? 0)}
-              </span>
+              <span className="text-xl font-bold text-foreground">{statsLoading ? "—" : (stats?.activeChannels ?? 0)}</span>
             </div>
           </div>
         </div>
 
-        {/* API ready notice */}
+        {/* Ready notice */}
         <div className="card card-p flex items-start gap-3">
           <ShieldCheck className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
           <div>
             <p className="text-xs font-semibold text-foreground">Voice Engine listo</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Los endpoints <code className="text-foreground">/api/voice/join</code> y{" "}
-              <code className="text-foreground">/api/voice/leave</code> están activos y esperando
-              eventos del bot Discord. Configura el bot con la URL base de GianCore.
+              <code className="text-foreground">/api/voice/join</code> y{" "}
+              <code className="text-foreground">/api/voice/leave</code> están activos.
+              Configura el bot con la URL base de GianCore.
             </p>
           </div>
         </div>
@@ -699,50 +753,38 @@ export default function DiscordPage() {
         {/* Tabs */}
         <div className="flex gap-0 border-b border-border overflow-x-auto">
           {tabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium
-                transition-all duration-150 border-b-2 -mb-px whitespace-nowrap shrink-0 ${
+            <button key={id} onClick={() => setActiveTab(id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-all duration-150 border-b-2 -mb-px whitespace-nowrap shrink-0 ${
                 activeTab === id
                   ? "border-[var(--theme-primary)] text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
+              }`}>
+              <Icon className="w-3.5 h-3.5" />{label}
             </button>
           ))}
         </div>
 
-        {/* Tab panels */}
-        {activeTab === "channels"   && <ChannelsPanel onAddChannel={() => setShowAddChannel(true)} />}
+        {activeTab === "channels"   && <ChannelsPanel onAdd={openAdd} onEdit={openEdit} />}
+        {activeTab === "mapping"    && <ProductMappingPanel onAdd={openAdd} onEdit={openEdit} />}
         {activeTab === "sessions"   && <SessionsPanel />}
         {activeTab === "cooldowns"  && <CooldownsPanel />}
         {activeTab === "statistics" && <StatisticsPanel stats={stats} loading={statsLoading} />}
         {activeTab === "servers"    && (
           <div className="card">
-            <EmptyState
-              icon={MessageCircle}
-              title="Sin servidores registrados"
-              description="Los servidores donde está el bot aparecerán aquí automáticamente cuando se conecte."
-              action={
-                <button className="btn-secondary" onClick={() => setShowConfig(true)}>
-                  <Settings className="w-4 h-4" /> Configurar bot
-                </button>
-              }
-            />
+            <EmptyState icon={MessageCircle} title="Sin servidores registrados"
+              description="Los servidores aparecerán aquí cuando el bot se conecte."
+              action={<button className="btn-secondary" onClick={() => setShowConfig(true)}><Settings className="w-4 h-4" /> Configurar bot</button>} />
           </div>
         )}
-
       </div>
 
-      <BotConfigModal  open={showConfig}     onClose={() => setShowConfig(false)} />
-      <AddChannelModal
-        open={showAddChannel}
-        onClose={() => setShowAddChannel(false)}
+      <BotConfigModal open={showConfig} onClose={() => setShowConfig(false)} />
+      <ChannelModal
+        open={showModal}
+        onClose={() => { setShowModal(false); setEditChannel(null); }}
         productOptions={productOptions}
         onSaved={refresh}
+        existing={editChannel}
       />
     </>
   );

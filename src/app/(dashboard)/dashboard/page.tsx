@@ -10,6 +10,7 @@ import {
   Zap, ScrollText, CheckCircle2, XCircle, Cpu, Mic,
 } from "lucide-react";
 import { useVoiceStats } from "@/hooks/useVoice";
+import WalletWidget from "@/components/shared/WalletWidget";
 import type { License, Product, AuditLog, Integration, VoiceStats } from "@/types";
 import type { LucideIcon } from "lucide-react";
 
@@ -322,6 +323,9 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Credits widget */}
+        <WalletWidget />
 
         {/* Voice Licensing widget */}
         <VoiceWidget stats={voiceStats} loading={voiceLoading} />

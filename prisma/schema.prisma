@@ -39,17 +39,21 @@ model RolePermission {
 
 model User {
   id           String   @id @default(cuid())
-  email        String   @unique
+  email        String?  @unique
   username     String   @unique
-  passwordHash String
+  passwordHash String   @default("")
   role         UserRole @default(reseller)
   active       Boolean  @default(true)
+  // Discord OAuth fields
+  discordId    String?  @unique
+  discordAvatar String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  creditWallet  CreditWallet?
-  licenses      License[]
-  auditLogs     AuditLog[]
+  wallet          Wallet?
+  creditWallet    CreditWallet?
+  licenses        License[]
+  auditLogs       AuditLog[]
   telegramAccount TelegramAccount?
 
   @@map("users")
@@ -66,6 +70,44 @@ model CreditWallet {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("credit_wallets")
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions CreditTransaction[]
+
+  @@map("wallets")
+}
+
+enum TransactionType {
+  credit_add
+  credit_remove
+  license_created
+  refund
+  transfer_in
+  transfer_out
+}
+
+model CreditTransaction {
+  id          String          @id @default(cuid())
+  walletId    String
+  amount      Float
+  type        TransactionType
+  reason      String?
+  createdById String?
+  createdAt   DateTime        @default(now())
+
+  wallet    Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([createdAt])
+  @@map("credit_transactions")
 }
 
 // ── Products ───────────────────────────────────────────────────────────────────
@@ -151,15 +193,17 @@ model DiscordChannel {
 // ── Voice Rules ────────────────────────────────────────────────────────────────
 
 model VoiceRule {
-  id              String   @id @default(cuid())
-  channelId       String   @unique
-  productId       String
-  enabled         Boolean  @default(true)
-  durationMinutes Int      @default(60)   // license duration
-  cooldownSeconds Int      @default(0)    // per-user cooldown
-  maxPerDay       Int      @default(100)  // max licenses per day
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(cuid())
+  channelId        String   @unique
+  productId        String
+  enabled          Boolean  @default(true)
+  durationMinutes  Int      @default(60)
+  cooldownSeconds  Int      @default(0)
+  maxPerDay        Int      @default(100)
+  licensePrefix    String?  // e.g. "FF", "IOS", "VPN"
+  licenseTemplate  String?  // e.g. "PREFIX-XXXX-XXXX"
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   channel DiscordChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   product Product        @relation(fields: [productId], references: [id])

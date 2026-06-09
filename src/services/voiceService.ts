@@ -74,13 +74,25 @@ export async function getActiveSession(channelId: string, discordUserId: string)
 
 // ── License generation ────────────────────────────────────────────────────────
 
-async function generateVoiceLicense(productId: string, durationMinutes: number, meta: Record<string, unknown>) {
+function generateKeyWithPrefix(prefix?: string | null): string {
+  const rand = () => Math.random().toString(36).substring(2, 6).toUpperCase();
+  const segments = `${rand()}-${rand()}-${rand()}-${rand()}`;
+  return prefix ? `${prefix.toUpperCase()}-${segments}` : segments;
+}
+
+async function generateVoiceLicense(
+  productId:       string,
+  durationMinutes: number,
+  licensePrefix:   string | null | undefined,
+  meta:            Record<string, unknown>,
+) {
   const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000);
-  // Use a system user placeholder (the first owner in the DB, or null)
-  const owner = await prisma.user.findFirst({ where: { role: "owner" } });
+  const owner     = await prisma.user.findFirst({ where: { role: "owner" } });
+  const key       = generateKeyWithPrefix(licensePrefix);
 
   return prisma.license.create({
     data: {
+      key,
       productId,
       userId:   owner?.id ?? (await getOrCreateSystemUser()),
       status:   "active",
@@ -149,12 +161,13 @@ export async function createVoiceSession(
     return { ok: false, reason: "daily_limit" };
   }
 
-  // 5. Generate license
-  const license = await generateVoiceLicense(rule.productId, rule.durationMinutes, {
-    discordUserId,
-    discordUsername,
-    channelId: discordChannelId,
-  });
+  // 5. Generate license with prefix from rule
+  const license = await generateVoiceLicense(
+    rule.productId,
+    rule.durationMinutes,
+    rule.licensePrefix,
+    { discordUserId, discordUsername, channelId: discordChannelId },
+  );
 
   // 6. Create session
   const session = await prisma.voiceSession.create({

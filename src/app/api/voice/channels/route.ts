@@ -55,7 +55,7 @@ export async function PATCH(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id, active, enabled, durationMinutes, cooldownSeconds, maxPerDay } = await req.json();
+  const { id, active, enabled, durationMinutes, cooldownSeconds, maxPerDay, licensePrefix, productId } = await req.json();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const channel = await prisma.discordChannel.update({
@@ -63,15 +63,19 @@ export async function PATCH(req: Request) {
     data:  { ...(active !== undefined ? { active } : {}) },
   });
 
-  if (channel.voiceRule && (enabled !== undefined || durationMinutes || cooldownSeconds !== undefined || maxPerDay)) {
-    await prisma.voiceRule.update({
-      where: { channelId: id },
-      data: {
-        ...(enabled          !== undefined ? { enabled }          : {}),
-        ...(durationMinutes  !== undefined ? { durationMinutes }  : {}),
-        ...(cooldownSeconds  !== undefined ? { cooldownSeconds }  : {}),
-        ...(maxPerDay        !== undefined ? { maxPerDay }        : {}),
-      },
+  const ruleUpdates: Record<string, unknown> = {};
+  if (enabled          !== undefined) ruleUpdates.enabled          = enabled;
+  if (durationMinutes  !== undefined) ruleUpdates.durationMinutes  = durationMinutes;
+  if (cooldownSeconds  !== undefined) ruleUpdates.cooldownSeconds  = cooldownSeconds;
+  if (maxPerDay        !== undefined) ruleUpdates.maxPerDay        = maxPerDay;
+  if (licensePrefix    !== undefined) ruleUpdates.licensePrefix    = licensePrefix;
+  if (productId        !== undefined) ruleUpdates.productId        = productId;
+
+  if (Object.keys(ruleUpdates).length > 0) {
+    await prisma.voiceRule.upsert({
+      where:  { channelId: id },
+      update: ruleUpdates,
+      create: { channelId: id, productId: productId ?? "", ...ruleUpdates },
     });
   }
 
