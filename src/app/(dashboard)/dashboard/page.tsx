@@ -7,9 +7,10 @@ import StatCard from "@/components/shared/StatCard";
 import Badge from "@/components/ui/Badge";
 import {
   Key, Package, Users, Activity, MessageCircle, Send,
-  Zap, ScrollText, CheckCircle2, XCircle, Clock, Cpu,
+  Zap, ScrollText, CheckCircle2, XCircle, Cpu, Mic,
 } from "lucide-react";
-import type { License, Product, AuditLog, Integration } from "@/types";
+import { useVoiceStats } from "@/hooks/useVoice";
+import type { License, Product, AuditLog, Integration, VoiceStats } from "@/types";
 import type { LucideIcon } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -84,6 +85,7 @@ export default function DashboardPage() {
   const [logs,         setLogs]         = useState<AuditLog[]>([]);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading,      setLoading]      = useState(true);
+  const { stats: voiceStats, loading: voiceLoading } = useVoiceStats(15_000);
 
   useEffect(() => {
     Promise.allSettled([
@@ -321,6 +323,9 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* Voice Licensing widget */}
+        <VoiceWidget stats={voiceStats} loading={voiceLoading} />
+
         {/* Module cards */}
         <div className="grid-3">
           <ModuleCard icon={MessageCircle} title="Discord Manager" description="Gestión de canales, roles y bots de Discord."  href="/discord"    color="blue"   />
@@ -355,6 +360,58 @@ function IntegrationRow({ name, active, icon: Icon }: {
           {active ? "Activo" : "Inactivo"}
         </span>
       </div>
+    </div>
+  );
+}
+
+// ── VoiceWidget ────────────────────────────────────────────────────────────────
+
+function VoiceWidget({ stats, loading }: { stats: VoiceStats | null; loading: boolean }) {
+  const items = [
+    { label: "Sesiones activas",  value: stats?.activeSessions ?? 0,  color: "#3498db", icon: Activity },
+    { label: "Licencias activas", value: stats?.activeLicenses ?? 0,  color: "#e74c3c", icon: Key      },
+    { label: "Usuarios conectados", value: stats?.connectedUsers ?? 0, color: "#27ae60", icon: Users    },
+    { label: "Canales activos",   value: stats?.activeChannels  ?? 0, color: "#9b59b6", icon: Mic      },
+  ];
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <Mic className="w-4 h-4" style={{ color: "#3498db" }} />
+          <p className="text-sm font-semibold text-foreground">Voice Licensing</p>
+        </div>
+        <Link href="/discord" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+          Ver detalle →
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-border">
+        {items.map(({ label, value, color, icon: Icon }) => (
+          <div key={label} className="p-4 flex flex-col gap-2">
+            {loading ? (
+              <div className="skeleton h-8 w-16 rounded" />
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <Icon className="w-4 h-4 shrink-0" style={{ color }} />
+                  <span className="text-2xl font-bold text-foreground">{value}</span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-tight">{label}</p>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+      {stats && (
+        <div className="px-4 py-2.5 border-t border-border flex items-center gap-4">
+          <span className="text-xs text-muted-foreground">
+            Hoy: <span className="text-foreground font-medium">{stats.totalToday}</span> sesiones
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Total: <span className="text-foreground font-medium">{stats.totalAllTime}</span>
+          </span>
+        </div>
+      )}
     </div>
   );
 }

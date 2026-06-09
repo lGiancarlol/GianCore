@@ -66,6 +66,16 @@ export interface License {
 
 // ── Discord ────────────────────────────────────────────────────────────────────
 
+export interface DiscordGuild {
+  id:        string;
+  guildId:   string;
+  name:      string;
+  iconUrl?:  string;
+  active:    boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DiscordChannel {
   id:        string;
   guildId:   string;
@@ -75,15 +85,60 @@ export interface DiscordChannel {
   active:    boolean;
   metadata?: Record<string, unknown>;
   createdAt: string;
+  voiceRule?: VoiceRule;
+}
+
+export interface VoiceRule {
+  id:              string;
+  channelId:       string;
+  productId:       string;
+  enabled:         boolean;
+  durationMinutes: number;
+  cooldownSeconds: number;
+  maxPerDay:       number;
+  createdAt:       string;
+  updatedAt:       string;
+  product?:        Pick<Product, "id" | "name" | "slug">;
 }
 
 export interface VoiceSession {
-  id:        string;
-  channelId: string;
-  userId:    string;
-  joinedAt:  string;
-  leftAt?:   string;
+  id:              string;
+  channelId:       string;
+  discordUserId:   string;
+  discordUsername: string;
+  licenseId?:      string;
+  joinedAt:        string;
+  leftAt?:         string;
+  durationSeconds?: number;
+  channel?:        Pick<DiscordChannel, "id" | "name" | "channelId">;
+  license?:        Pick<License, "id" | "key" | "status">;
 }
+
+export interface VoiceCooldown {
+  id:            string;
+  channelId:     string;
+  discordUserId: string;
+  expiresAt:     string;
+  createdAt:     string;
+  channel?:      Pick<DiscordChannel, "id" | "name">;
+}
+
+export interface VoiceStats {
+  activeSessions:  number;
+  activeLicenses:  number;
+  connectedUsers:  number;
+  activeChannels:  number;
+  totalToday:      number;
+  totalAllTime:    number;
+}
+
+export type VoiceJoinResult =
+  | { ok: true;  session: VoiceSession; license: License }
+  | { ok: false; reason: "channel_disabled" | "cooldown" | "daily_limit" | "invalid_channel" | "already_active" };
+
+export type VoiceLeaveResult =
+  | { ok: true;  session: VoiceSession }
+  | { ok: false; reason: "session_not_found" };
 
 // ── Telegram ───────────────────────────────────────────────────────────────────
 
