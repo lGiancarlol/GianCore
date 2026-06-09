@@ -317,8 +317,8 @@ export default function LicensesPage() {
                         {l.user?.username ?? <span className="italic">Sin asignar</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <Badge variant={STATUS_VARIANT[l.status]}>
-                          {STATUS_LABEL[l.status]}
+                        <Badge variant={STATUS_VARIANT[l.status as LicenseStatus] ?? "muted"}>
+                          {STATUS_LABEL[l.status as LicenseStatus] ?? l.status}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">

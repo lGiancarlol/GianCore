@@ -1,26 +1,44 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requirePermission } from "@/lib/apiAuth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const check = await requirePermission("users:view");
+  if (!check.ok) return check.response;
 
-  const users = await prisma.user.findMany({
-    select: {
-      id: true, email: true, username: true,
-      role: true, active: true, createdAt: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  return NextResponse.json({ data: users });
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true, email: true, username: true,
+        role: true, active: true, createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return NextResponse.json({ data: users });
+  } catch {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
-export async function POST(req: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function PATCH(req: Request) {
+  const check = await requirePermission("users:manage");
+  if (!check.ok) return check.response;
 
-  // TODO: implement user creation with RBAC check
-  return NextResponse.json({ message: "Not implemented" }, { status: 501 });
+  try {
+    const { id, role, active } = await req.json();
+    if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data:  {
+        ...(role   !== undefined ? { role }   : {}),
+        ...(active !== undefined ? { active } : {}),
+      },
+      select: { id: true, username: true, role: true, active: true },
+    });
+
+    return NextResponse.json({ data: updated });
+  } catch {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

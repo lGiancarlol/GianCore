@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requirePermission } from "@/lib/apiAuth";
 import { getTransactions } from "@/services/walletService";
 
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const check = await requirePermission("licenses:view");
+  if (!check.ok) return check.response;
 
-  const { searchParams } = new URL(req.url);
-  const userId = (searchParams.get("userId") ?? (session.user as any).id) as string;
-  const limit  = Number(searchParams.get("limit")  ?? 50);
-  const offset = Number(searchParams.get("offset") ?? 0);
+  try {
+    const { searchParams } = new URL(req.url);
+    const limit  = Math.min(Number(searchParams.get("limit")  ?? 50), 200);
+    const offset = Number(searchParams.get("offset") ?? 0);
+    const userId = (check.session.user as any).id as string;
 
-  const transactions = await getTransactions(userId, limit, offset);
-  return NextResponse.json({ data: transactions });
+    const txs = await getTransactions(userId, limit, offset);
+    return NextResponse.json({ data: txs });
+  } catch {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

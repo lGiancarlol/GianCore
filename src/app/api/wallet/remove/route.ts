@@ -1,27 +1,27 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requirePermission } from "@/lib/apiAuth";
 import { removeCredits } from "@/services/walletService";
-import { isOwnerOrAdmin } from "@/lib/rbac";
-import type { UserRole } from "@/types";
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const role = (session.user as any).role as UserRole;
-  if (!isOwnerOrAdmin(role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const { userId, amount, reason } = await req.json();
-  if (!userId || !amount) {
-    return NextResponse.json({ error: "userId and amount required" }, { status: 400 });
-  }
+  const check = await requirePermission("resellers:edit");
+  if (!check.ok) return check.response;
 
   try {
-    const result = await removeCredits(userId, Number(amount), reason, (session.user as any).id);
+    const { userId, amount, reason } = await req.json();
+    if (!userId || !amount) {
+      return NextResponse.json({ error: "userId and amount required" }, { status: 400 });
+    }
+
+    const parsed = parseInt(String(amount), 10);
+    if (isNaN(parsed) || parsed <= 0) {
+      return NextResponse.json({ error: "amount must be a positive integer" }, { status: 400 });
+    }
+
+    const result = await removeCredits(userId, parsed, reason, (check.session.user as any).id);
     return NextResponse.json({ data: result });
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 400 });
+  } catch (err: any) {
+    const safe = err?.message?.includes("Insufficient") || err?.message?.includes("Wallet")
+      ? err.message : "Internal server error";
+    return NextResponse.json({ error: safe }, { status: 400 });
   }
 }

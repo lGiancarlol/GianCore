@@ -29,7 +29,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "dashboard:view",
     "licenses:view", "licenses:create", "licenses:edit",
     "products:view",
-    "resellers:view",
+    "resellers:view", "resellers:edit",
     "discord:view",
     "telegram:view",
     "automation:view",
@@ -48,6 +48,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "products:view",
     "logs:view",
   ],
+  pending: [],
 };
 
 export function can(role: UserRole, permission: Permission): boolean {

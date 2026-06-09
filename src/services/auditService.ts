@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 export async function createAuditLog(data: {
   userId?: string;
@@ -9,7 +10,10 @@ export async function createAuditLog(data: {
   ip?: string;
 }) {
   return prisma.auditLog.create({
-    data: { ...data, metadata: data.metadata ?? {} },
+    data: {
+      ...data,
+      metadata: (data.metadata ?? {}) as Prisma.InputJsonValue,
+    },
   });
 }
 

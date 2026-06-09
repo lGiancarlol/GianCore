@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { requireBotToken } from "@/lib/botAuth";
 import { createVoiceSession } from "@/services/voiceService";
 
-// Called by the Discord bot when a user joins a voice channel
-// Body: { channelId: string, userId: string, username: string }
 export async function POST(req: Request) {
+  const authError = requireBotToken(req);
+  if (authError) return authError;
+
   try {
     const body = await req.json();
     const { channelId, userId, username } = body;
@@ -33,8 +35,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ data: result }, { status: 201 });
-  } catch (err) {
-    console.error("[voice/join]", err);
+  } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

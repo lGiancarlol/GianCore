@@ -27,7 +27,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           where: { email: credentials.email as string },
         });
 
-        if (!user || !user.active || !user.passwordHash) return null;
+        if (!user || !user.active || !user.passwordHash || user.role === "pending") return null;
 
         const valid = await bcrypt.compare(
           credentials.password as string,
@@ -74,10 +74,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             discordAvatar: discordProfile.avatar
               ? `https://cdn.discordapp.com/avatars/${discordProfile.id}/${discordProfile.avatar}.png`
               : null,
-            role:          "reseller",
-            active:        true,
+            // New Discord users start as pending — owner must approve
+            role:          "pending",
+            active:        false,
           },
         });
+
+        // Block inactive / pending accounts from logging in
+        if (!dbUser.active) return false;
 
         // Ensure wallet exists
         await prisma.wallet.upsert({

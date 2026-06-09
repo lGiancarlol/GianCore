@@ -41,7 +41,7 @@ function ResellerFormModal({ open, onClose, reseller, productOptions }: {
     reseller
       ? {
           username:        reseller.username,
-          email:           reseller.email,
+          email:           reseller.email ?? "",
           credits:         String(reseller.creditWallet?.balance ?? 0),
           genLimit:        "100",
           allowedProducts: [],

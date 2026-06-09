@@ -44,12 +44,13 @@ export function buildClient(): Client {
   // Register events
   const events = [readyEvent, voiceStateUpdate];
   for (const event of events) {
+    const name = event.name as string;
     if ((event as any).once) {
-      client.once(event.name, (...args) => (event.execute as any)(...args));
+      client.once(name as any, (...args: any[]) => (event.execute as any)(...args));
     } else {
-      client.on(event.name, (...args) => (event.execute as any)(...args));
+      client.on(name as any, (...args: any[]) => (event.execute as any)(...args));
     }
-    logger.debug(LOG_CTX.CLIENT, `Event registered: ${event.name}`);
+    logger.debug(LOG_CTX.CLIENT, `Event registered: ${name}`);
   }
 
   // Interaction handler

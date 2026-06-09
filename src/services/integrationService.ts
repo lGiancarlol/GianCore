@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 export async function getIntegrations() {
   return prisma.integration.findMany({ orderBy: { createdAt: "desc" } });
@@ -13,9 +14,15 @@ export async function upsertIntegration(data: {
   type: string;
   config: Record<string, unknown>;
 }) {
-  return prisma.integration.upsert({
-    where: { type: data.type },
-    update: { config: data.config, name: data.name },
-    create: { ...data },
+  // Integration has no unique field besides id — use findFirst + update/create
+  const existing = await prisma.integration.findFirst({ where: { type: data.type } });
+  if (existing) {
+    return prisma.integration.update({
+      where:  { id: existing.id },
+      data:   { config: data.config as Prisma.InputJsonValue, name: data.name },
+    });
+  }
+  return prisma.integration.create({
+    data: { name: data.name, type: data.type, config: data.config as Prisma.InputJsonValue },
   });
 }

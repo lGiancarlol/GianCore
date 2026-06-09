@@ -1,8 +1,8 @@
 // ── Roles ──────────────────────────────────────────────────────────────────────
 
-export type UserRole = "owner" | "admin" | "reseller" | "support";
+export type UserRole = "owner" | "admin" | "reseller" | "support" | "pending";
 
-export const ROLES: UserRole[] = ["owner", "admin", "reseller", "support"];
+export const ROLES: UserRole[] = ["owner", "admin", "reseller", "support", "pending"];
 
 // ── User ───────────────────────────────────────────────────────────────────────
 

@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/services/auditService";
 import type { VoiceJoinResult, VoiceLeaveResult, VoiceStats } from "@/types";
@@ -36,7 +37,6 @@ export async function checkCooldown(
   if (cooldown.expiresAt > new Date()) {
     return { onCooldown: true, expiresAt: cooldown.expiresAt };
   }
-  // expired — clean up
   await prisma.voiceCooldown.delete({
     where: { channelId_discordUserId: { channelId, discordUserId } },
   });
@@ -53,16 +53,6 @@ async function setCooldown(channelId: string, discordUserId: string, seconds: nu
   });
 }
 
-// ── Daily limit helper ─────────────────────────────────────────────────────────
-
-async function countTodaySessions(channelId: string): Promise<number> {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  return prisma.voiceSession.count({
-    where: { channelId, joinedAt: { gte: start } },
-  });
-}
-
 // ── Active session helper ──────────────────────────────────────────────────────
 
 export async function getActiveSession(channelId: string, discordUserId: string) {
@@ -72,48 +62,55 @@ export async function getActiveSession(channelId: string, discordUserId: string)
   });
 }
 
-// ── License generation ────────────────────────────────────────────────────────
+// ── License key generation (crypto-safe) ──────────────────────────────────────
 
 function generateKeyWithPrefix(prefix?: string | null): string {
-  const rand = () => Math.random().toString(36).substring(2, 6).toUpperCase();
-  const segments = `${rand()}-${rand()}-${rand()}-${rand()}`;
+  const seg = () => randomBytes(2).toString("hex").toUpperCase();
+  const segments = `${seg()}-${seg()}-${seg()}-${seg()}`;
   return prefix ? `${prefix.toUpperCase()}-${segments}` : segments;
 }
+
+// ── System user ────────────────────────────────────────────────────────────────
+
+async function getOrCreateSystemUser(): Promise<string> {
+  const user = await prisma.user.upsert({
+    where:  { email: "system@giancore.internal" },
+    update: {},
+    create: {
+      email:        "system@giancore.internal",
+      username:     "system",
+      passwordHash: "",
+      role:         "owner",
+      active:       true,
+    },
+  });
+  return user.id;
+}
+
+// ── License generation ────────────────────────────────────────────────────────
 
 async function generateVoiceLicense(
   productId:       string,
   durationMinutes: number,
   licensePrefix:   string | null | undefined,
   meta:            Record<string, unknown>,
+  tx:              typeof prisma,
 ) {
   const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000);
-  const owner     = await prisma.user.findFirst({ where: { role: "owner" } });
+  const owner     = await (tx as any).user.findFirst({ where: { role: "owner", active: true } });
+  const userId    = owner?.id ?? await getOrCreateSystemUser();
   const key       = generateKeyWithPrefix(licensePrefix);
 
-  return prisma.license.create({
+  return (tx as any).license.create({
     data: {
       key,
       productId,
-      userId:   owner?.id ?? (await getOrCreateSystemUser()),
+      userId,
       status:   "active",
       expiresAt,
       metadata: { source: "voice", ...meta },
     },
   });
-}
-
-async function getOrCreateSystemUser(): Promise<string> {
-  const existing = await prisma.user.findFirst({ where: { email: "system@giancore.internal" } });
-  if (existing) return existing.id;
-  const created = await prisma.user.create({
-    data: {
-      email:        "system@giancore.internal",
-      username:     "system",
-      passwordHash: "",
-      role:         "owner",
-    },
-  });
-  return created.id;
 }
 
 async function deactivateVoiceLicense(licenseId: string) {
@@ -123,7 +120,7 @@ async function deactivateVoiceLicense(licenseId: string) {
   });
 }
 
-// ── JOIN ───────────────────────────────────────────────────────────────────────
+// ── JOIN — fully atomic serializable transaction ───────────────────────────────
 
 export async function createVoiceSession(
   discordChannelId: string,
@@ -132,64 +129,77 @@ export async function createVoiceSession(
   ip?: string,
 ): Promise<VoiceJoinResult> {
 
-  // 1. Resolve channel + rule
+  // Resolve channel + rule (outside tx — read-only pre-check)
   const channel = await getVoiceChannel(discordChannelId);
-  if (!channel || !channel.active) {
-    return { ok: false, reason: "invalid_channel" };
-  }
+  if (!channel || !channel.active) return { ok: false, reason: "invalid_channel" };
 
   const rule = channel.voiceRule;
-  if (!rule || !rule.enabled) {
-    return { ok: false, reason: "channel_disabled" };
-  }
+  if (!rule || !rule.enabled) return { ok: false, reason: "channel_disabled" };
 
-  // 2. Check already active
-  const existing = await getActiveSession(channel.id, discordUserId);
-  if (existing) {
-    return { ok: false, reason: "already_active" };
-  }
-
-  // 3. Check cooldown
+  // Cooldown check (outside tx — non-critical, soft check)
   const { onCooldown } = await checkCooldown(channel.id, discordUserId);
-  if (onCooldown) {
-    return { ok: false, reason: "cooldown" };
+  if (onCooldown) return { ok: false, reason: "cooldown" };
+
+  // ── Serializable transaction: prevents duplicate sessions under concurrency ──
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // Re-check active session inside tx
+      const existing = await (tx as any).voiceSession.findFirst({
+        where: { channelId: channel.id, discordUserId, leftAt: null },
+      });
+      if (existing) throw Object.assign(new Error("already_active"), { code: "already_active" });
+
+      // Re-check daily limit inside tx
+      const start = new Date(); start.setHours(0, 0, 0, 0);
+      const todayCount = await (tx as any).voiceSession.count({
+        where: { channelId: channel.id, joinedAt: { gte: start } },
+      });
+      if (todayCount >= rule.maxPerDay) {
+        throw Object.assign(new Error("daily_limit"), { code: "daily_limit" });
+      }
+
+      // Generate license inside tx
+      const license = await generateVoiceLicense(
+        rule.productId,
+        rule.durationMinutes,
+        rule.licensePrefix,
+        { discordUserId, discordUsername, channelId: discordChannelId },
+        tx as any,
+      );
+
+      // Create session inside tx
+      const session = await (tx as any).voiceSession.create({
+        data: {
+          channelId:       channel.id,
+          discordUserId,
+          discordUsername,
+          licenseId:       license.id,
+        },
+        include: { channel: true, license: true },
+      });
+
+      return { session, license };
+    }, { isolationLevel: "Serializable" });
+
+    // Audit log (outside tx — non-critical)
+    await createAuditLog({
+      action:   "voice.join",
+      entity:   "voice_session",
+      entityId: result.session.id,
+      ip,
+      metadata: { discordUserId, discordUsername, channelId: discordChannelId, licenseId: result.license.id },
+    });
+
+    return { ok: true, session: result.session as any, license: result.license as any };
+
+  } catch (err: any) {
+    const code = err?.code as string | undefined;
+    if (code === "already_active") return { ok: false, reason: "already_active" };
+    if (code === "daily_limit")    return { ok: false, reason: "daily_limit" };
+    // Prisma unique constraint violation (P2002) = duplicate session race
+    if (err?.code === "P2002")     return { ok: false, reason: "already_active" };
+    throw err;
   }
-
-  // 4. Check daily limit
-  const todayCount = await countTodaySessions(channel.id);
-  if (todayCount >= rule.maxPerDay) {
-    return { ok: false, reason: "daily_limit" };
-  }
-
-  // 5. Generate license with prefix from rule
-  const license = await generateVoiceLicense(
-    rule.productId,
-    rule.durationMinutes,
-    rule.licensePrefix,
-    { discordUserId, discordUsername, channelId: discordChannelId },
-  );
-
-  // 6. Create session
-  const session = await prisma.voiceSession.create({
-    data: {
-      channelId:       channel.id,
-      discordUserId,
-      discordUsername,
-      licenseId:       license.id,
-    },
-    include: { channel: true, license: true },
-  });
-
-  // 7. Audit log
-  await createAuditLog({
-    action:   "voice.join",
-    entity:   "voice_session",
-    entityId: session.id,
-    ip,
-    metadata: { discordUserId, discordUsername, channelId: discordChannelId, licenseId: license.id },
-  });
-
-  return { ok: true, session: session as any, license: license as any };
 }
 
 // ── LEAVE ──────────────────────────────────────────────────────────────────────
@@ -209,31 +219,23 @@ export async function closeVoiceSession(
     ? await getActiveSession(channel.id, discordUserId)
     : null;
 
-  if (!session) {
-    return { ok: false, reason: "session_not_found" };
-  }
+  if (!session) return { ok: false, reason: "session_not_found" };
 
   const now      = new Date();
   const duration = Math.floor((now.getTime() - new Date(session.joinedAt).getTime()) / 1000);
 
-  // Close session
   const closed = await prisma.voiceSession.update({
-    where: { id: session.id },
-    data:  { leftAt: now, durationSeconds: duration },
+    where:   { id: session.id },
+    data:    { leftAt: now, durationSeconds: duration },
     include: { channel: true, license: true },
   });
 
-  // Deactivate license
-  if (session.licenseId) {
-    await deactivateVoiceLicense(session.licenseId);
-  }
+  if (session.licenseId) await deactivateVoiceLicense(session.licenseId);
 
-  // Set cooldown
   if (channel?.voiceRule?.cooldownSeconds) {
     await setCooldown(channel.id, discordUserId, channel.voiceRule.cooldownSeconds);
   }
 
-  // Audit log
   await createAuditLog({
     action:   "voice.leave",
     entity:   "voice_session",
@@ -248,10 +250,9 @@ export async function closeVoiceSession(
 // ── Stats ──────────────────────────────────────────────────────────────────────
 
 export async function getVoiceStats(): Promise<VoiceStats> {
-  const now   = new Date();
   const start = new Date(); start.setHours(0, 0, 0, 0);
 
-  const [activeSessions, activeLicenses, totalToday, totalAllTime, activeChannels] =
+  const [activeSessions, activeLicenses, totalToday, totalAllTime, activeChannels, openSessions] =
     await Promise.all([
       prisma.voiceSession.count({ where: { leftAt: null } }),
       prisma.license.count({
@@ -260,15 +261,13 @@ export async function getVoiceStats(): Promise<VoiceStats> {
       prisma.voiceSession.count({ where: { joinedAt: { gte: start } } }),
       prisma.voiceSession.count(),
       prisma.discordChannel.count({ where: { active: true, type: "voice", voiceRule: { enabled: true } } }),
+      prisma.voiceSession.findMany({
+        where:  { leftAt: null },
+        select: { discordUserId: true },
+      }),
     ]);
 
-  // Unique active users = distinct discordUserId in open sessions
-  const openSessions = await prisma.voiceSession.findMany({
-    where:  { leftAt: null },
-    select: { discordUserId: true },
-  });
   const connectedUsers = new Set(openSessions.map((s) => s.discordUserId)).size;
-
   return { activeSessions, activeLicenses, connectedUsers, activeChannels, totalToday, totalAllTime };
 }
 
@@ -282,7 +281,7 @@ export async function getVoiceSessions(onlyActive = false, limit = 50) {
       license: { select: { id: true, key: true, status: true } },
     },
     orderBy: { joinedAt: "desc" },
-    take:    limit,
+    take:    Math.min(limit, 200),
   });
 }
 

@@ -6,9 +6,9 @@ import type { TransactionType } from "@/types";
 
 export async function getOrCreateWallet(userId: string) {
   return prisma.wallet.upsert({
-    where:  { userId },
-    update: {},
-    create: { userId, balance: 0 },
+    where:   { userId },
+    update:  {},
+    create:  { userId, balance: 0 },
     include: { transactions: { orderBy: { createdAt: "desc" }, take: 10 } },
   });
 }
@@ -21,12 +21,12 @@ export async function getBalance(userId: string): Promise<number> {
 // ── Add credits ────────────────────────────────────────────────────────────────
 
 export async function addCredits(
-  userId:      string,
-  amount:      number,
-  reason?:     string,
+  userId:       string,
+  amount:       number,
+  reason?:      string,
   createdById?: string,
 ): Promise<{ balance: number }> {
-  if (amount <= 0) throw new Error("Amount must be positive");
+  if (!Number.isInteger(amount) || amount <= 0) throw new Error("Amount must be a positive integer");
 
   const wallet = await getOrCreateWallet(userId);
 
@@ -57,95 +57,105 @@ export async function addCredits(
   return { balance: updated.balance };
 }
 
-// ── Remove credits ─────────────────────────────────────────────────────────────
+// ── Remove credits — atomic with balance check inside transaction ──────────────
 
 export async function removeCredits(
-  userId:      string,
-  amount:      number,
-  reason?:     string,
+  userId:       string,
+  amount:       number,
+  reason?:      string,
   createdById?: string,
 ): Promise<{ balance: number }> {
-  if (amount <= 0) throw new Error("Amount must be positive");
+  if (!Number.isInteger(amount) || amount <= 0) throw new Error("Amount must be a positive integer");
 
-  const wallet = await prisma.wallet.findUnique({ where: { userId } });
-  if (!wallet) throw new Error("Wallet not found");
-  if (wallet.balance < amount) throw new Error("Insufficient balance");
+  const result = await prisma.$transaction(async (tx) => {
+    const wallet = await tx.wallet.findUnique({ where: { userId } });
+    if (!wallet) throw new Error("Wallet not found");
+    if (wallet.balance < amount) throw new Error("Insufficient balance");
 
-  const [updated] = await prisma.$transaction([
-    prisma.wallet.update({
-      where: { id: wallet.id },
-      data:  { balance: { decrement: amount } },
-    }),
-    prisma.creditTransaction.create({
-      data: {
-        walletId:    wallet.id,
-        amount:      -amount,
-        type:        "credit_remove",
-        reason:      reason ?? "Manual credit removal",
-        createdById: createdById ?? null,
-      },
-    }),
-  ]);
+    const [updated] = await Promise.all([
+      tx.wallet.update({
+        where: { id: wallet.id },
+        data:  { balance: { decrement: amount } },
+      }),
+      tx.creditTransaction.create({
+        data: {
+          walletId:    wallet.id,
+          amount:      -amount,
+          type:        "credit_remove",
+          reason:      reason ?? "Manual credit removal",
+          createdById: createdById ?? null,
+        },
+      }),
+    ]);
+
+    return { walletId: wallet.id, balance: updated.balance };
+  });
 
   await createAuditLog({
     userId:   createdById,
     action:   "credit_removed",
     entity:   "wallet",
-    entityId: wallet.id,
+    entityId: result.walletId,
     metadata: { targetUserId: userId, amount, reason },
   });
 
-  return { balance: updated.balance };
+  return { balance: result.balance };
 }
 
-// ── Transfer credits ───────────────────────────────────────────────────────────
+// ── Transfer credits — atomic, no self-transfer ───────────────────────────────
 
 export async function transferCredits(
-  fromUserId:  string,
-  toUserId:    string,
-  amount:      number,
-  reason?:     string,
+  fromUserId: string,
+  toUserId:   string,
+  amount:     number,
+  reason?:    string,
 ): Promise<{ fromBalance: number; toBalance: number }> {
-  if (amount <= 0) throw new Error("Amount must be positive");
+  if (!Number.isInteger(amount) || amount <= 0) throw new Error("Amount must be a positive integer");
+  if (fromUserId === toUserId) throw new Error("Cannot transfer credits to yourself");
 
-  const [fromWallet, toWallet] = await Promise.all([
-    prisma.wallet.findUnique({ where: { userId: fromUserId } }),
-    getOrCreateWallet(toUserId),
-  ]);
+  const result = await prisma.$transaction(async (tx) => {
+    const fromWallet = await tx.wallet.findUnique({ where: { userId: fromUserId } });
+    if (!fromWallet) throw new Error("Source wallet not found");
+    if (fromWallet.balance < amount) throw new Error("Insufficient balance");
 
-  if (!fromWallet) throw new Error("Source wallet not found");
-  if (fromWallet.balance < amount) throw new Error("Insufficient balance");
+    // Ensure destination wallet exists
+    const toWallet = await tx.wallet.upsert({
+      where:  { userId: toUserId },
+      update: {},
+      create: { userId: toUserId, balance: 0 },
+    });
 
-  const now = new Date();
+    const [from, to] = await Promise.all([
+      tx.wallet.update({
+        where: { id: fromWallet.id },
+        data:  { balance: { decrement: amount } },
+      }),
+      tx.wallet.update({
+        where: { id: toWallet.id },
+        data:  { balance: { increment: amount } },
+      }),
+      tx.creditTransaction.create({
+        data: {
+          walletId:    fromWallet.id,
+          amount:      -amount,
+          type:        "transfer_out",
+          reason:      reason ?? `Transfer to ${toUserId}`,
+          createdById: fromUserId,
+        },
+      }),
+      tx.creditTransaction.create({
+        data: {
+          walletId:    toWallet.id,
+          amount,
+          type:        "transfer_in",
+          reason:      reason ?? `Transfer from ${fromUserId}`,
+          createdById: fromUserId,
+        },
+      }),
+    ]);
 
-  const [from, to] = await prisma.$transaction([
-    prisma.wallet.update({
-      where: { id: fromWallet.id },
-      data:  { balance: { decrement: amount } },
-    }),
-    prisma.wallet.update({
-      where: { id: toWallet.id },
-      data:  { balance: { increment: amount } },
-    }),
-    prisma.creditTransaction.create({
-      data: {
-        walletId:    fromWallet.id,
-        amount:      -amount,
-        type:        "transfer_out",
-        reason:      reason ?? `Transfer to ${toUserId}`,
-        createdById: fromUserId,
-      },
-    }),
-    prisma.creditTransaction.create({
-      data: {
-        walletId:    toWallet.id,
-        amount,
-        type:        "transfer_in",
-        reason:      reason ?? `Transfer from ${fromUserId}`,
-        createdById: fromUserId,
-      },
-    }),
-  ]);
+    return { fromBalance: from.balance, toBalance: to.balance };
+  });
 
   await createAuditLog({
     userId:   fromUserId,
@@ -154,7 +164,7 @@ export async function transferCredits(
     metadata: { fromUserId, toUserId, amount, reason },
   });
 
-  return { fromBalance: from.balance, toBalance: to.balance };
+  return result;
 }
 
 // ── Transactions ───────────────────────────────────────────────────────────────
@@ -162,11 +172,10 @@ export async function transferCredits(
 export async function getTransactions(userId: string, limit = 50, offset = 0) {
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
   if (!wallet) return [];
-
   return prisma.creditTransaction.findMany({
     where:   { walletId: wallet.id },
     orderBy: { createdAt: "desc" },
-    take:    limit,
+    take:    Math.min(limit, 200),
     skip:    offset,
   });
 }
@@ -177,9 +186,7 @@ export async function getWalletMonthlyStats(userId: string) {
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
   if (!wallet) return { added: 0, removed: 0, balance: 0 };
 
-  const start = new Date();
-  start.setDate(1);
-  start.setHours(0, 0, 0, 0);
+  const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
 
   const txs = await prisma.creditTransaction.findMany({
     where: { walletId: wallet.id, createdAt: { gte: start } },
@@ -194,11 +201,12 @@ export async function getWalletMonthlyStats(userId: string) {
 // ── Refund ─────────────────────────────────────────────────────────────────────
 
 export async function refundCredits(
-  userId:      string,
-  amount:      number,
-  reason?:     string,
+  userId:       string,
+  amount:       number,
+  reason?:      string,
   createdById?: string,
 ) {
+  if (!Number.isInteger(amount) || amount <= 0) throw new Error("Amount must be a positive integer");
   const wallet = await getOrCreateWallet(userId);
 
   const [updated] = await prisma.$transaction([

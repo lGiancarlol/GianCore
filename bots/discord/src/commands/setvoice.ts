@@ -45,7 +45,7 @@ export default {
     const result = await createVoiceChannel({
       guildId,
       channelId:    channel.id,
-      name:         channel.name,
+      name:         channel.name ?? channel.id,
       productId,
       durationMinutes,
       cooldownSeconds,

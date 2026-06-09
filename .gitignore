@@ -19,8 +19,8 @@ dist/
 .env.production.local
 
 # Prisma
-prisma/migrations/
 !prisma/schema.prisma
+# migrations are tracked in git (required for production deploys)
 
 # Logs
 npm-debug.log*

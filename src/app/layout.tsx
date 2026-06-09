@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
+import "@/lib/env"; // validates env vars — throws in production if insecure defaults are set
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 

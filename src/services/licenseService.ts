@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import type { LicenseStatus } from "@/types";
 
 export async function getLicenses() {
@@ -24,8 +25,9 @@ export async function getLicenseByKey(key: string) {
 export async function createLicense(data: {
   key: string;
   productId: string;
-  userId?: string;
+  userId: string;
   expiresAt?: Date;
+  metadata?: Prisma.InputJsonValue;
 }) {
   return prisma.license.create({ data });
 }
