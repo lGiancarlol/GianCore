@@ -1,18 +1,18 @@
 // ── Provider Engine – Core Interfaces ─────────────────────────────────────────
 
-export type ProviderType = "telegram_bot" | "keyauth" | "auth_panel" | "rest_api";
+export type ProviderType = "telegram_bot" | "telegram_user" | "keyauth" | "auth_panel" | "rest_api";
 
 export interface ProviderRequest {
-  productExternalRef: string; // identifier the provider uses for the product
-  userId:             string; // GianCore user id
+  productExternalRef: string;
+  userId:             string;
   metadata?:          Record<string, unknown>;
 }
 
 export interface ProviderResponse {
   ok:           boolean;
-  key?:         string;   // license key returned by the provider
+  key?:         string;
   expiresAt?:   Date;
-  rawResponse?: unknown;  // original provider payload
+  rawResponse?: unknown;
   error?:       string;
 }
 
@@ -22,13 +22,29 @@ export interface HealthCheckResult {
   error?:     string;
 }
 
+export interface KeyActionResult {
+  ok:     boolean;
+  key?:   string;
+  raw?:   string;
+  error?: string;
+}
+
 // Every provider must implement this interface
 export interface IProvider {
-  readonly id:   string; // matches Provider.id in DB
+  readonly id:   string;
   readonly name: string;
   readonly type: ProviderType;
 
   requestLicense(req: ProviderRequest): Promise<ProviderResponse>;
   revokeLicense(key: string):           Promise<{ ok: boolean; error?: string }>;
   healthCheck():                        Promise<HealthCheckResult>;
+}
+
+// Optional extended interface for user-account providers (Telethon)
+export interface UserProviderActions {
+  clickButton(messageId: number, buttonText: string, keyPattern?: string): Promise<KeyActionResult>;
+  queryKey(key: string):      Promise<KeyActionResult>;
+  activateKey(key: string):   Promise<KeyActionResult>;
+  deactivateKey(key: string): Promise<KeyActionResult>;
+  resetIp(key: string):       Promise<KeyActionResult>;
 }

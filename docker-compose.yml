@@ -17,6 +17,24 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Telethon Bridge ───────────────────────────────────────────────────────────
+  telethon-bridge:
+    build:
+      context: ./services/telethon-bridge
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      BRIDGE_TOKEN:  ${BRIDGE_TOKEN:?BRIDGE_TOKEN is required}
+      SESSIONS_DIR:  /app/sessions
+      REPLY_TIMEOUT: ${REPLY_TIMEOUT:-45}
+    volumes:
+      - telethon_sessions:/app/sessions
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8001/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
   # ── GianCore App ──────────────────────────────────────────────────────────────
   app:
     build:
@@ -26,6 +44,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      telethon-bridge:
+        condition: service_healthy
     environment:
       DATABASE_URL:          postgresql://${POSTGRES_USER:-giancore}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-giancore}
       NEXTAUTH_SECRET:       ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
@@ -33,6 +53,9 @@ services:
       DISCORD_CLIENT_ID:     ${DISCORD_CLIENT_ID:-}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
       API_TOKEN:             ${API_TOKEN:?API_TOKEN is required}
+      PROVIDER_SECRETS_KEY:  ${PROVIDER_SECRETS_KEY:-}
+      BRIDGE_URL:            http://telethon-bridge:8001
+      BRIDGE_TOKEN:          ${BRIDGE_TOKEN:?BRIDGE_TOKEN is required}
       NODE_ENV:              production
     ports:
       - "${APP_PORT:-3000}:3000"
@@ -61,3 +84,4 @@ services:
 
 volumes:
   postgres_data:
+  telethon_sessions:

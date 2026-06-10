@@ -217,7 +217,7 @@ export interface AuditLog {
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
-export type ProviderType = "telegram_bot" | "keyauth" | "auth_panel" | "rest_api";
+export type ProviderType = "telegram_bot" | "telegram_user" | "keyauth" | "auth_panel" | "rest_api";
 
 export interface Provider {
   id:        string;

@@ -269,6 +269,7 @@ model TelegramAccount {
 
 enum ProviderType {
   telegram_bot
+  telegram_user
   keyauth
   auth_panel
   rest_api
