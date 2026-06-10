@@ -7,13 +7,14 @@ import { useState, useEffect, useCallback } from "react";
 import {
   LayoutDashboard, Key, Package, Users, MessageCircle,
   Send, Zap, ScrollText, Settings, ChevronLeft, ChevronRight,
-  LogOut, Cpu,
+  LogOut, Cpu, ServerCog,
 } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard",    label: "Dashboard",        icon: LayoutDashboard },
   { href: "/licenses",     label: "Licencias",         icon: Key },
   { href: "/products",     label: "Productos",         icon: Package },
+  { href: "/providers",    label: "Providers",         icon: ServerCog },
   { href: "/resellers",    label: "Revendedores",       icon: Users },
   { href: "/discord",      label: "Discord Manager",   icon: MessageCircle },
   { href: "/telegram",     label: "Telegram Manager",  icon: Send },

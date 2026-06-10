@@ -56,6 +56,7 @@ model User {
   licenses        License[]
   auditLogs       AuditLog[]
   telegramAccount TelegramAccount?
+  providerRequests ProviderRequest[]
 
   @@map("users")
 }
@@ -127,6 +128,7 @@ model Product {
   licenses         License[]
   voiceRules       VoiceRule[]
   providerProducts ProviderProduct[]
+  providerRequests ProviderRequest[]
 
   @@map("products")
 }
@@ -283,6 +285,8 @@ model Provider {
 
   products  ProviderProduct[]
   accounts  ProviderAccount[]
+  requests  ProviderRequest[]
+  logs      ProviderLog[]
 
   @@map("providers")
 }
@@ -316,6 +320,52 @@ model ProviderAccount {
   provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
   @@map("provider_accounts")
+}
+
+// ── Provider Requests & Logs ──────────────────────────────────────────────────
+
+enum ProviderRequestStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+model ProviderRequest {
+  id           String                @id @default(cuid())
+  providerId   String
+  productId    String
+  userId       String
+  requestType  String                @default("license") // license | revoke
+  status       ProviderRequestStatus @default(pending)
+  responseData Json?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  provider Provider @relation(fields: [providerId], references: [id])
+  product  Product  @relation(fields: [productId],  references: [id])
+  user     User     @relation(fields: [userId],     references: [id])
+
+  @@index([providerId])
+  @@index([userId])
+  @@index([status])
+  @@map("provider_requests")
+}
+
+model ProviderLog {
+  id         String   @id @default(cuid())
+  providerId String
+  action     String
+  request    Json?
+  response   Json?
+  error      String?
+  createdAt  DateTime @default(now())
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+  @@index([createdAt])
+  @@map("provider_logs")
 }
 
 // ── Integrations ───────────────────────────────────────────────────────────────

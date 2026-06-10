@@ -254,6 +254,30 @@ export interface ProviderAccount {
   updatedAt:   string;
 }
 
+export type ProviderRequestStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface ProviderRequest {
+  id:           string;
+  providerId:   string;
+  productId:    string;
+  userId:       string;
+  requestType:  string;
+  status:       ProviderRequestStatus;
+  responseData?: Record<string, unknown>;
+  createdAt:    string;
+  updatedAt:    string;
+}
+
+export interface ProviderLog {
+  id:         string;
+  providerId: string;
+  action:     string;
+  request?:   Record<string, unknown>;
+  response?:  Record<string, unknown>;
+  error?:     string;
+  createdAt:  string;
+}
+
 // ── Setting ────────────────────────────────────────────────────────────────────
 
 export interface Setting {
