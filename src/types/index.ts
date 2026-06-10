@@ -278,6 +278,41 @@ export interface ProviderLog {
   createdAt:  string;
 }
 
+export type JobStatus = "pending" | "running" | "done" | "failed";
+
+export interface ProviderJob {
+  id:         string;
+  providerId: string;
+  requestId:  string;
+  status:     JobStatus;
+  payload:    Record<string, unknown>;
+  response?:  Record<string, unknown>;
+  retries:    number;
+  createdAt:  string;
+  updatedAt:  string;
+}
+
+export interface ProviderConversation {
+  id:             string;
+  providerId:     string;
+  telegramUserId: string;
+  state:          string;
+  lastMessageId?: string;
+  createdAt:      string;
+  updatedAt:      string;
+}
+
+export interface ProviderStats {
+  total:         number;
+  completed:     number;
+  failed:        number;
+  pending:       number;
+  avgResponseMs: number | null;
+  lastKey:       Record<string, unknown> | null;
+  lastKeyAt:     string | null;
+  lastError:     { error: string; createdAt: string } | null;
+}
+
 // ── Setting ────────────────────────────────────────────────────────────────────
 
 export interface Setting {

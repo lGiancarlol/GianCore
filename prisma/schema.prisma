@@ -283,10 +283,12 @@ model Provider {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  products  ProviderProduct[]
-  accounts  ProviderAccount[]
-  requests  ProviderRequest[]
-  logs      ProviderLog[]
+  products       ProviderProduct[]
+  accounts       ProviderAccount[]
+  requests       ProviderRequest[]
+  logs           ProviderLog[]
+  conversations  ProviderConversation[]
+  jobs           ProviderJob[]
 
   @@map("providers")
 }
@@ -322,6 +324,49 @@ model ProviderAccount {
   @@map("provider_accounts")
 }
 
+// ── Provider Conversations & Jobs ────────────────────────────────────────────
+
+model ProviderConversation {
+  id              String   @id @default(cuid())
+  providerId      String
+  telegramUserId  String   // our bot's user id used to track the session
+  state           String   @default("idle") // idle | waiting_response | done | error
+  lastMessageId   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, telegramUserId])
+  @@map("provider_conversations")
+}
+
+enum JobStatus {
+  pending
+  running
+  done
+  failed
+}
+
+model ProviderJob {
+  id          String    @id @default(cuid())
+  providerId  String
+  requestId   String
+  status      JobStatus @default(pending)
+  payload     Json
+  response    Json?
+  retries     Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  provider Provider        @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  request  ProviderRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+  @@index([status])
+  @@map("provider_jobs")
+}
+
 // ── Provider Requests & Logs ──────────────────────────────────────────────────
 
 enum ProviderRequestStatus {
@@ -342,9 +387,10 @@ model ProviderRequest {
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @updatedAt
 
-  provider Provider @relation(fields: [providerId], references: [id])
-  product  Product  @relation(fields: [productId],  references: [id])
-  user     User     @relation(fields: [userId],     references: [id])
+  provider Provider      @relation(fields: [providerId], references: [id])
+  product  Product       @relation(fields: [productId],  references: [id])
+  user     User          @relation(fields: [userId],     references: [id])
+  jobs     ProviderJob[]
 
   @@index([providerId])
   @@index([userId])

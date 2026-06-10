@@ -8,11 +8,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id: providerId } = await params;
   try {
     const { label, credentials, active } = await req.json();
-    if (!label || !credentials) {
-      return NextResponse.json({ error: "label and credentials are required" }, { status: 400 });
+    if (!label || !credentials || typeof credentials !== "object") {
+      return NextResponse.json({ error: "label and credentials (object) are required" }, { status: 400 });
     }
+    // credentials are encrypted inside createProviderAccount
     const data = await createProviderAccount({ providerId, label, credentials, active });
-    return NextResponse.json({ data }, { status: 201 });
+    // Never return the encrypted blob to the client
+    return NextResponse.json({ data: { id: data.id, label: data.label, active: data.active, createdAt: data.createdAt } }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -25,7 +27,7 @@ export async function PATCH(req: Request) {
     const { id, label, active } = await req.json();
     if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
     const data = await updateProviderAccount(id, { label, active });
-    return NextResponse.json({ data });
+    return NextResponse.json({ data: { id: data.id, label: data.label, active: data.active } });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
