@@ -20,16 +20,26 @@ export interface TelegramUserProviderConfig {
   sessionString:   string;
   /** @username or numeric id of the external bot */
   targetBot:       string;
-  /** Command template for license request. Use {ref} placeholder. e.g. "/start {ref}" */
+  /**
+   * Command to send first. Use {ref} placeholder.
+   * e.g. "/start" or "/start {ref}"
+   */
   commandTemplate: string;
+  /**
+   * If set, after sending commandTemplate GianCore will wait for a message
+   * with an InlineKeyboard and click the button whose text contains this value.
+   * Use {ref} placeholder — it will be replaced with productExternalRef.
+   * e.g. buttonRef: "{ref}" → will click button containing "HOUR"
+   */
+  buttonRef?:      string;
   /** Regex with capture group 1 to extract the key from bot reply */
   keyPattern:      string;
   /** Command templates for key management. Use {key} placeholder. */
   commands?: {
-    status?:    string;  // e.g. "/status {key}"
-    activate?:  string;  // e.g. "/activate {key}"
-    deactivate?:string;  // e.g. "/deactivate {key}"
-    resetIp?:   string;  // e.g. "/resetip {key}"
+    status?:     string;
+    activate?:   string;
+    deactivate?: string;
+    resetIp?:    string;
   };
   /** Max seconds to wait for bot reply */
   timeoutSecs?: number;
@@ -95,20 +105,38 @@ export class TelegramUserProvider implements IProvider, UserProviderActions {
   // ── IProvider ─────────────────────────────────────────────────────────────
 
   async requestLicense(req: ProviderRequest): Promise<ProviderResponse> {
-    const command = this.cfg.commandTemplate.replace("{ref}", req.productExternalRef);
+    const command    = this.cfg.commandTemplate.replace("{ref}", req.productExternalRef);
+    const buttonRef  = this.cfg.buttonRef?.replace("{ref}", req.productExternalRef);
+
     try {
-      const result = await this.bridgePost<BridgeOkResponse>("/request-license", {
-        account:     this.accountPayload,
-        target_bot:  this.cfg.targetBot,
-        command,
-        key_pattern: this.cfg.keyPattern,
-        timeout:     this.timeout,
-      });
+      let result: BridgeOkResponse;
+
+      if (buttonRef) {
+        // 2-step flow: send command → wait for keyboard → click button → extract key
+        result = await this.bridgePost<BridgeOkResponse>("/request-license-button", {
+          account:      this.accountPayload,
+          target_bot:   this.cfg.targetBot,
+          command,
+          button_text:  buttonRef,
+          key_pattern:  this.cfg.keyPattern,
+          timeout:      this.timeout,
+        });
+      } else {
+        // 1-step flow: send command → wait for reply → extract key
+        result = await this.bridgePost<BridgeOkResponse>("/request-license", {
+          account:      this.accountPayload,
+          target_bot:   this.cfg.targetBot,
+          command,
+          key_pattern:  this.cfg.keyPattern,
+          timeout:      this.timeout,
+        });
+      }
+
       return {
-        ok:           result.ok,
-        key:          result.key   ?? undefined,
-        rawResponse:  result.raw_response ?? undefined,
-        error:        result.error ?? undefined,
+        ok:          result.ok,
+        key:         result.key          ?? undefined,
+        rawResponse: result.raw_response ?? undefined,
+        error:       result.error        ?? undefined,
       };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };

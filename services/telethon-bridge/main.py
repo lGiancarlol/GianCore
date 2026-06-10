@@ -56,6 +56,15 @@ class RequestLicenseReq(BaseModel):
     timeout:         int = 45
 
 
+class RequestLicenseButtonReq(BaseModel):
+    account:         AccountCreds
+    target_bot:      str    # bot @username or numeric id
+    command:         str    # e.g. "/start"
+    button_text:     str    # text to match on the inline button, e.g. "HOUR"
+    key_pattern:     str    # regex with capture group 1
+    timeout:         int = 45
+
+
 class ClickButtonReq(BaseModel):
     account:         AccountCreds
     target_bot:      str
@@ -118,6 +127,31 @@ async def request_license(req: RequestLicenseReq):
 
         return OkResponse(ok=True, key=key, raw_response=reply)
 
+    except Exception as e:
+        return OkResponse(ok=False, error=str(e))
+
+
+@app.post("/request-license-button", response_model=OkResponse, dependencies=[Depends(verify_token)])
+async def request_license_button(req: RequestLicenseButtonReq):
+    """
+    Full 2-step flow:
+      1. Send command (e.g. /start)
+      2. Wait for message with InlineKeyboard
+      3. Find and click button matching button_text (e.g. "HOUR")
+      4. Wait for bot reply
+      5. Extract key via key_pattern
+    """
+    try:
+        client = await _client(req.account)
+        result = await actions.send_wait_click_wait(
+            client,
+            req.target_bot,
+            req.command,
+            req.button_text,
+            req.key_pattern,
+            req.timeout,
+        )
+        return OkResponse(**result)
     except Exception as e:
         return OkResponse(ok=False, error=str(e))
 

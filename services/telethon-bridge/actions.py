@@ -98,3 +98,110 @@ def extract_key(text: str, pattern: str) -> Optional[str]:
     """Apply regex pattern (with capture group 1) to extract key from text."""
     m = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
     return m.group(1).strip() if m else None
+
+
+async def send_wait_click_wait(
+    client: TelegramClient,
+    target: str,
+    command: str,
+    button_text: str,
+    key_pattern: str,
+    timeout: int,
+) -> dict:
+    """
+    Full 2-step flow:
+      1. Send `command` to `target`
+      2. Wait for a message that contains an InlineKeyboard
+      3. Find button whose text contains `button_text` (case-insensitive)
+      4. Click it
+      5. Wait for the next reply
+      6. Extract key via `key_pattern`
+
+    Returns dict with keys: ok, key, raw_response, error
+    """
+    deadline = asyncio.get_event_loop().time() + timeout
+
+    # ── Step 1: send command ──────────────────────────────────────────────────
+    sent_id = await send_message(client, target, command)
+
+    # ── Step 2: wait for message with inline keyboard ────────────────────────
+    kbd_future: asyncio.Future[Message] = asyncio.get_event_loop().create_future()
+
+    @client.on(events.NewMessage(from_users=target))
+    async def kbd_handler(event: events.NewMessage.Event) -> None:
+        msg: Message = event.message
+        if msg.id <= sent_id or kbd_future.done():
+            return
+        # Accept message that has a reply_markup (inline keyboard)
+        if msg.reply_markup is not None:
+            kbd_future.set_result(msg)
+        # Also accept plain text messages in case the bot sends text first;
+        # we'll handle that below if we never find a keyboard.
+
+    remaining = deadline - asyncio.get_event_loop().time()
+    try:
+        kbd_msg: Message = await asyncio.wait_for(kbd_future, timeout=max(remaining, 1))
+    except asyncio.TimeoutError:
+        client.remove_event_handler(kbd_handler)
+        return {"ok": False, "error": "Timeout waiting for inline keyboard from bot"}
+    finally:
+        client.remove_event_handler(kbd_handler)
+
+    # ── Step 3 & 4: find button and click ────────────────────────────────────
+    if not kbd_msg.reply_markup:
+        return {"ok": False, "error": "Bot reply has no inline keyboard", "raw_response": kbd_msg.text}
+
+    target_btn = None
+    for row in kbd_msg.reply_markup.rows:
+        for btn in row.buttons:
+            if isinstance(btn, KeyboardButtonCallback) and button_text.lower() in btn.text.lower():
+                target_btn = btn
+                break
+        if target_btn:
+            break
+
+    if target_btn is None:
+        available = [
+            btn.text
+            for row in kbd_msg.reply_markup.rows
+            for btn in row.buttons
+            if isinstance(btn, KeyboardButtonCallback)
+        ]
+        return {
+            "ok": False,
+            "error": f"Button '{button_text}' not found. Available: {available}",
+            "raw_response": kbd_msg.text,
+        }
+
+    # Register reply listener BEFORE clicking to avoid race condition
+    reply_future: asyncio.Future[Message] = asyncio.get_event_loop().create_future()
+    click_msg_id = kbd_msg.id
+
+    @client.on(events.NewMessage(from_users=target))
+    async def reply_handler(event: events.NewMessage.Event) -> None:
+        if event.message.id > click_msg_id and not reply_future.done():
+            reply_future.set_result(event.message)
+
+    try:
+        await kbd_msg.click(text=target_btn.text)
+    except Exception as e:
+        client.remove_event_handler(reply_handler)
+        return {"ok": False, "error": f"Click failed: {e}"}
+
+    # ── Step 5: wait for reply after click ───────────────────────────────────
+    remaining = deadline - asyncio.get_event_loop().time()
+    try:
+        reply_msg: Message = await asyncio.wait_for(reply_future, timeout=max(remaining, 1))
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": "Timeout waiting for reply after button click"}
+    finally:
+        client.remove_event_handler(reply_handler)
+
+    raw = reply_msg.text or ""
+
+    # ── Step 6: extract key ───────────────────────────────────────────────────
+    key = extract_key(raw, key_pattern)
+    if key is None:
+        return {"ok": False, "error": "Key pattern not matched in reply", "raw_response": raw}
+
+    return {"ok": True, "key": key, "raw_response": raw}
