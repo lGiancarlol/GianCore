@@ -124,8 +124,9 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  licenses   License[]
-  voiceRules VoiceRule[]
+  licenses         License[]
+  voiceRules       VoiceRule[]
+  providerProducts ProviderProduct[]
 
   @@map("products")
 }
@@ -260,6 +261,61 @@ model TelegramAccount {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("telegram_accounts")
+}
+
+// ── Providers ─────────────────────────────────────────────────────────────────
+
+enum ProviderType {
+  telegram_bot
+  keyauth
+  auth_panel
+  rest_api
+}
+
+model Provider {
+  id          String       @id @default(cuid())
+  name        String
+  type        ProviderType
+  active      Boolean      @default(true)
+  config      Json         // connection params (bot token, base url, etc.)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  products  ProviderProduct[]
+  accounts  ProviderAccount[]
+
+  @@map("providers")
+}
+
+model ProviderProduct {
+  id           String   @id @default(cuid())
+  providerId   String
+  productId    String
+  externalRef  String   // identifier used by the provider (command, product id, etc.)
+  metadata     Json?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@unique([providerId, productId])
+  @@map("provider_products")
+}
+
+model ProviderAccount {
+  id         String   @id @default(cuid())
+  providerId String
+  label      String   // e.g. "bot_account_1"
+  credentials Json    // bot token, api key, session string, etc. (encrypted at app level)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("provider_accounts")
 }
 
 // ── Integrations ───────────────────────────────────────────────────────────────

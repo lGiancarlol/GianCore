@@ -215,6 +215,45 @@ export interface AuditLog {
   user?:     Pick<User, "id" | "username">;
 }
 
+// ── Providers ─────────────────────────────────────────────────────────────────
+
+export type ProviderType = "telegram_bot" | "keyauth" | "auth_panel" | "rest_api";
+
+export interface Provider {
+  id:        string;
+  name:      string;
+  type:      ProviderType;
+  active:    boolean;
+  config:    Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  products?: ProviderProduct[];
+  accounts?: ProviderAccount[];
+}
+
+export interface ProviderProduct {
+  id:            string;
+  providerId:    string;
+  productId:     string;
+  externalRef:   string;
+  metadata?:     Record<string, unknown>;
+  active:        boolean;
+  createdAt:     string;
+  updatedAt:     string;
+  provider?:     Pick<Provider, "id" | "name" | "type">;
+  product?:      Pick<Product, "id" | "name" | "slug">;
+}
+
+export interface ProviderAccount {
+  id:          string;
+  providerId:  string;
+  label:       string;
+  credentials: Record<string, unknown>;
+  active:      boolean;
+  createdAt:   string;
+  updatedAt:   string;
+}
+
 // ── Setting ────────────────────────────────────────────────────────────────────
 
 export interface Setting {
